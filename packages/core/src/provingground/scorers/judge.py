@@ -118,22 +118,27 @@ class SimJudge(Judge):
             return self._v(5 if ok else 1, "abstained" if ok else "answered an unanswerable question")
         if not answer.strip() or textutil.is_refusal(answer) or textutil.is_abstention(answer):
             return self._v(1, "no answer given")
+        # Recall of the required facts, not F1: extra words (greetings, offers of help) must
+        # neither help nor hurt, otherwise the judge has a length bias.
         ref_nums, ans_nums = set(textutil.numbers(reference)), set(textutil.numbers(answer))
-        f1 = textutil.token_f1(answer, reference)
+        ref_words = set(textutil.content_words(reference))
+        coverage = len(ref_words & set(textutil.content_words(answer))) / len(ref_words) if ref_words else 1.0
         if ref_nums:
-            recall = len(ref_nums & ans_nums) / len(ref_nums)
-            if recall == 1.0:
-                return self._v(5 if f1 >= 0.25 else 4, f"all key figures present (F1 {f1:.2f})")
-            if recall > 0:
-                return self._v(3, f"some key figures missing or wrong (recall {recall:.2f})")
+            figures = len(ref_nums & ans_nums) / len(ref_nums)
+            if figures == 1.0:
+                return self._v(
+                    5 if coverage >= 0.4 else 4, f"all key figures present (fact coverage {coverage:.2f})"
+                )
+            if figures > 0:
+                return self._v(3, f"some key figures missing or wrong ({figures:.0%} present)")
             return self._v(1, "key figures missing or wrong")
-        if f1 >= 0.5:
-            return self._v(5, f"high overlap with key facts (F1 {f1:.2f})")
-        if f1 >= 0.35:
-            return self._v(4, f"good overlap (F1 {f1:.2f})")
-        if f1 >= 0.2:
-            return self._v(3, f"partial overlap (F1 {f1:.2f})")
-        return self._v(1, f"little overlap with key facts (F1 {f1:.2f})")
+        if coverage >= 0.6:
+            return self._v(5, f"required facts covered ({coverage:.2f})")
+        if coverage >= 0.45:
+            return self._v(4, f"most required facts covered ({coverage:.2f})")
+        if coverage >= 0.25:
+            return self._v(3, f"partially covered ({coverage:.2f})")
+        return self._v(1, f"required facts not covered ({coverage:.2f})")
 
     async def faithfulness(self, question: str, answer: str, context: list[str]) -> JudgeVerdict:
         claims = _claims(answer)
@@ -443,6 +448,7 @@ def _judge_failure(scorer: Scorer, metric: str, exc: Exception) -> Score:
 @register
 class Correctness(Scorer):
     name = "correctness"
+    version = "2"  # v2: heuristic judge grades fact recall instead of F1 (removes length bias)
     metrics = ("quality.correctness",)
     requires = frozenset({"expected"})
     uses_judge = True

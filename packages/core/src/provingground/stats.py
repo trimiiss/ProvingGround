@@ -85,6 +85,46 @@ def paired_bootstrap_diff(
     return point, float(np.quantile(diffs, alpha)), float(np.quantile(diffs, 1 - alpha))
 
 
+def unpaired_diff_ci(
+    baseline: Sequence[float] | np.ndarray,
+    candidate: Sequence[float] | np.ndarray,
+    stat: StatFn = mean_stat,
+    *,
+    n_boot: int = 5000,
+    conf: float = 0.95,
+    seed: int = 0,
+) -> tuple[float, float, float]:
+    """Point estimate and CI of ``stat(candidate) - stat(baseline)`` for two independent samples.
+
+    Used for metrics that aren't naturally paired per case, such as latency percentiles.
+    """
+    a = np.asarray(baseline, dtype=float)
+    b = np.asarray(candidate, dtype=float)
+    if a.size == 0 or b.size == 0:
+        raise ValueError("unpaired_diff_ci needs two non-empty arrays")
+    point = float(stat(b[None, :])[0] - stat(a[None, :])[0])
+    if a.size == 1 and b.size == 1:
+        return point, point, point
+    rng = np.random.default_rng(seed)
+    boot_a = _resample_stat(a, stat, n_boot, rng)
+    boot_b = _resample_stat(b, stat, n_boot, rng)
+    diffs = boot_b - boot_a
+    alpha = (1 - conf) / 2
+    return point, float(np.quantile(diffs, alpha)), float(np.quantile(diffs, 1 - alpha))
+
+
+def _resample_stat(arr: np.ndarray, stat: StatFn, n_boot: int, rng: np.random.Generator) -> np.ndarray:
+    n = len(arr)
+    chunk = max(1, min(n_boot, _MAX_CELLS // max(n, 1)))
+    parts: list[np.ndarray] = []
+    done = 0
+    while done < n_boot:
+        size = min(chunk, n_boot - done)
+        parts.append(stat(arr[rng.integers(0, n, size=(size, n))]))
+        done += size
+    return np.concatenate(parts)
+
+
 def mcnemar_exact(n01: int, n10: int) -> float:
     """Two-sided exact McNemar p-value from the discordant pair counts.
 

@@ -1,0 +1,39 @@
+name: quality-gate
+
+# Blocks a pull request that makes an AI agent worse. Make the `quality-gate` job a *required*
+# status check in branch protection to enforce it (Settings > Branches > main).
+
+on:
+  pull_request:
+    paths:
+      - "services/demo_agents/**"
+      - "datasets/**"
+      - "provingground.yaml"
+      - "packages/core/**"
+      - ".github/workflows/quality-gate.yml"
+      - ".github/actions/provingground-gate/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: quality-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the gate diffs against the base branch
+
+      - name: Fetch base branch
+        run: git fetch --no-tags origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+
+      - uses: ./.github/actions/provingground-gate
+        with:
+          base: origin/${{ github.base_ref }}
+          policy: release

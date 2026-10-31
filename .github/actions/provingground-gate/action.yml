@@ -1,0 +1,135 @@
+name: ProvingGround quality gate
+description: >
+  Evaluate the AI agents a pull request changed against the base branch and fail the job when
+  quality, safety, latency or cost regress beyond the configured policy. Posts a sticky PR
+  comment, writes a job summary and uploads the HTML report.
+
+inputs:
+  base:
+    description: Git ref to compare against (needs fetch-depth 0 so the ref exists).
+    required: true
+    default: origin/main
+  policy:
+    description: Gate policy name from provingground.yaml.
+    default: release
+  config:
+    description: Path to provingground.yaml (defaults to discovery from the repo root).
+    default: ""
+  sample:
+    description: Sample N cases per suite (empty = full suites).
+    default: ""
+  all-targets:
+    description: "Gate every target instead of only the changed ones ('true' / 'false')."
+    default: "false"
+  comment:
+    description: "Post/update a sticky pull-request comment ('true' / 'false')."
+    default: "true"
+  install-command:
+    description: Command that installs ProvingGround and the project's dependencies.
+    default: uv sync --frozen
+  run-prefix:
+    description: Prefix used to invoke the CLI (e.g. 'uv run').
+    default: uv run
+  github-token:
+    description: Token used to post the PR comment.
+    default: ${{ github.token }}
+
+outputs:
+  exit-code:
+    description: "0 = pass/warn, 1 = gate failed (merge should be blocked), 2 = pipeline error."
+    value: ${{ steps.gate.outputs.exit_code }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+
+    - name: Install
+      shell: bash
+      run: ${{ inputs.install-command }}
+
+    - name: Restore response cache
+      uses: actions/cache@v4
+      with:
+        path: .provingground/cache
+        key: pground-cache-${{ github.sha }}
+        restore-keys: pground-cache-
+
+    - name: Run quality gate
+      id: gate
+      shell: bash
+      env:
+        BASE: ${{ inputs.base }}
+        POLICY: ${{ inputs.policy }}
+        CONFIG: ${{ inputs.config }}
+        SAMPLE: ${{ inputs.sample }}
+        ALL_TARGETS: ${{ inputs.all-targets }}
+        RUN_PREFIX: ${{ inputs.run-prefix }}
+      run: |
+        args=(gate-changed --base "$BASE" --policy "$POLICY" --out-dir gate-out)
+        if [ -n "$CONFIG" ]; then args+=(--config "$CONFIG"); fi
+        if [ -n "$SAMPLE" ]; then args+=(--sample "$SAMPLE"); fi
+        if [ "$ALL_TARGETS" = "true" ]; then args+=(--all); fi
+        set +e
+        $RUN_PREFIX pground "${args[@]}"
+        code=$?
+        set -e
+        echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+        # Always publish what we have, even on failure.
+        if [ -f gate-out/report.md ]; then cat gate-out/report.md >> "$GITHUB_STEP_SUMMARY"; fi
+        exit 0
+
+    - name: Upload gate report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: provingground-gate-report
+        path: gate-out/
+        if-no-files-found: ignore
+        retention-days: 30
+
+    - name: Comment on the pull request
+      if: >-
+        always() && inputs.comment == 'true' && github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const fs = require('fs');
+          const marker = '<!-- provingground-quality-gate -->';
+          let body = '## ⚠️ Quality gate produced no report\n\nSee the workflow logs.';
+          if (fs.existsSync('gate-out/report.md')) {
+            body = fs.readFileSync('gate-out/report.md', 'utf8');
+          }
+          if (body.length > 60000) {
+            body = body.slice(0, 60000) + '\n\n_(truncated; full report in the workflow artifact)_';
+          }
+          body = `${marker}\n${body}`;
+          const { owner, repo } = context.repo;
+          const issue_number = context.issue.number;
+          const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
+          const existing = comments.find((c) => c.body && c.body.startsWith(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+          } else {
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+          }
+
+    - name: Enforce gate result
+      shell: bash
+      env:
+        CODE: ${{ steps.gate.outputs.exit_code }}
+      run: |
+        if [ "$CODE" = "0" ]; then
+          echo "Quality gate passed."
+        elif [ "$CODE" = "1" ]; then
+          echo "::error title=Quality gate failed::An AI agent regressed beyond the release policy. See the PR comment / job summary."
+          exit 1
+        else
+          echo "::error title=Quality gate pipeline error::The gate could not reach a verdict (exit $CODE). See the logs."
+          exit 2
+        fi

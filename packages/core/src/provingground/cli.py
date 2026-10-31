@@ -143,13 +143,17 @@ def run(
         list[str] | None, typer.Option("--set", help="Override target fields, e.g. --set model=sim/model-b")
     ] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    label: Annotated[
+        list[str] | None, typer.Option("--label", help="Attach key=value labels to the run")
+    ] = None,
     open_report: Annotated[bool, typer.Option("--open", help="Open the HTML report when done")] = False,
 ) -> None:
     """Evaluate a target and save a run plus Markdown/HTML/JSON reports."""
     cfg = _load(config)
     settings = settings_from_config(cfg, sample=sample, repeats=repeats, concurrency=concurrency, seed=seed,
                                     use_cache=not no_cache)  # fmt: skip
-    run_obj = _run_with_progress(cfg, target, _suite_list(suite), settings, _parse_overrides(set_))
+    labels = {k: str(v) for k, v in _parse_overrides(label).items()}
+    run_obj = _run_with_progress(cfg, target, _suite_list(suite), settings, _parse_overrides(set_), labels)
     store = RunStore(cfg.root)
     directory = store.save(
         run_obj, render_run_reports(run_obj, requests_per_month=cfg.traffic.requests_per_month)
@@ -169,6 +173,7 @@ def _run_with_progress(
     suites: list[str] | None,
     settings: RunSettings,
     overrides: dict[str, object],
+    labels: dict[str, str] | None = None,
 ) -> Run:
     from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
 
@@ -182,7 +187,13 @@ def _run_with_progress(
         try:
             return asyncio.run(
                 run_target(
-                    cfg, target, suites=suites, settings=settings, overrides=overrides, progress=on_progress
+                    cfg,
+                    target,
+                    suites=suites,
+                    settings=settings,
+                    overrides=overrides,
+                    labels=labels,
+                    progress=on_progress,
                 )
             )
         except (ConfigError, KeyError) as exc:
@@ -210,6 +221,147 @@ def report(
 
 
 @app.command()
+def compare(
+    target: Annotated[str, typer.Option("--target", "-t")],
+    baseline: Annotated[
+        str, typer.Option("--baseline", "-b", help="file:<path> | run:<id> | latest | rerun:<ref>")
+    ],
+    suite: Annotated[str | None, typer.Option("--suite", "-s")] = None,
+    sample: Annotated[int | None, typer.Option()] = None,
+    set_: Annotated[
+        list[str] | None, typer.Option("--set", help="Candidate overrides, e.g. --set model=sim/model-b")
+    ] = None,
+    set_baseline: Annotated[
+        list[str] | None, typer.Option("--set-baseline", help="Baseline overrides (A/B without git)")
+    ] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    output: Annotated[
+        Path | None, typer.Option("--output", "-o", help="Write the Markdown comparison here")
+    ] = None,
+) -> None:
+    """Compare a candidate against a baseline, per case, with confidence intervals."""
+    from .engine import compare_target
+    from .report.compare_report import render_comparison_markdown
+
+    cfg = _load(config)
+    settings = settings_from_config(cfg, sample=sample)
+    base_over = _parse_overrides(set_baseline) if set_baseline else None
+    comparison, _, _ = asyncio.run(
+        compare_target(
+            cfg,
+            target,
+            baseline,
+            suites=_suite_list(suite),
+            settings=settings,
+            candidate_overrides=_parse_overrides(set_),
+            baseline_overrides=base_over,
+        )
+    )
+    md = render_comparison_markdown(comparison, cfg)
+    if output:
+        output.write_text(md, encoding="utf-8")
+    console.print(md, markup=False, highlight=False)
+
+
+@app.command()
+def gate(
+    target: Annotated[str, typer.Option("--target", "-t")],
+    policy: Annotated[str, typer.Option("--policy", "-p")] = "release",
+    baseline: Annotated[
+        str | None, typer.Option("--baseline", "-b", help="Override the policy's baseline")
+    ] = None,
+    suite: Annotated[str | None, typer.Option("--suite", "-s")] = None,
+    sample: Annotated[int | None, typer.Option(help="Sample N cases per suite (keeps PR runs fast)")] = None,
+    set_: Annotated[
+        list[str] | None, typer.Option("--set", help="Candidate overrides, e.g. --set model=sim/model-b")
+    ] = None,
+    set_baseline: Annotated[list[str] | None, typer.Option("--set-baseline")] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    out_dir: Annotated[
+        Path | None, typer.Option("--out-dir", help="Write report.md / report.html / summary")
+    ] = None,
+    quiet: Annotated[bool, typer.Option("--quiet", "-q")] = False,
+) -> None:
+    """Run the quality gate. Exit 0 = PASS/WARN, 1 = FAIL, 2 = pipeline error."""
+    from .engine import gate_target
+    from .gate import EXIT_ERROR
+    from .report.compare_report import render_gate_html, render_gate_markdown
+
+    cfg = _load(config)
+    settings = settings_from_config(cfg, sample=sample)
+    base_over = _parse_overrides(set_baseline) if set_baseline else None
+    try:
+        result, comparison, candidate, _ = asyncio.run(
+            gate_target(
+                cfg,
+                target,
+                policy,
+                baseline_override=baseline,
+                suites=_suite_list(suite),
+                settings=settings,
+                candidate_overrides=_parse_overrides(set_),
+                baseline_overrides=base_over,
+            )
+        )
+    except (ConfigError, KeyError) as exc:
+        err.print(f"[red]gate error:[/red] {exc}")
+        raise typer.Exit(EXIT_ERROR) from exc
+    except Exception as exc:
+        err.print(f"[red]gate pipeline error:[/red] {type(exc).__name__}: {exc}")
+        raise typer.Exit(EXIT_ERROR) from exc
+
+    md = render_gate_markdown(result, comparison, candidate)
+    if not quiet:
+        console.print(md, markup=False, highlight=False)
+    if out_dir:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "report.md").write_text(md, encoding="utf-8")
+        (out_dir / "report.html").write_text(
+            render_gate_html(result, comparison, candidate), encoding="utf-8"
+        )
+        (out_dir / "summary.json").write_text(result.model_dump_json(indent=1), encoding="utf-8")
+    colour = {"PASS": "green", "WARN": "yellow", "FAIL": "red", "INCONCLUSIVE": "yellow"}[result.verdict]
+    console.print(f"[bold {colour}]Gate {result.verdict}[/bold {colour}] (exit {result.exit_code})")
+    raise typer.Exit(result.exit_code)
+
+
+@app.command()
+def leaderboard(
+    target: Annotated[str, typer.Option("--target", "-t", help="Agent to sweep across models")],
+    models: Annotated[
+        str, typer.Option("--models", "-m", help="Comma-separated model refs")
+    ] = "sim/model-a,sim/model-b,sim/model-c",
+    suite: Annotated[str | None, typer.Option("--suite", "-s")] = None,
+    sample: Annotated[int | None, typer.Option()] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Sweep a target across models and rank them, flagging the quality-vs-cost Pareto front."""
+    from .compare import leaderboard as build_leaderboard
+
+    cfg = _load(config)
+    settings = settings_from_config(cfg, sample=sample)
+    runs = []
+    for model in [m.strip() for m in models.split(",") if m.strip()]:
+        runs.append(asyncio.run(run_target(cfg, target, suites=_suite_list(suite), settings=settings,
+                                           overrides={"model": model})))  # fmt: skip
+    table = Table(
+        "model", "pass rate", "correctness", "faithfulness", "attack success", "cost/1k", "p95", "pareto"
+    )
+    for row in build_leaderboard(runs):
+        table.add_row(
+            row.model or row.run_id,
+            "—" if row.pass_rate is None else f"{row.pass_rate * 100:.0f}%",
+            f"{row.metrics.get('quality.correctness', float('nan')):.3f}",
+            f"{row.metrics.get('factuality.faithfulness', float('nan')):.3f}",
+            f"{row.metrics.get('safety.attack_success_rate', float('nan')):.3f}",
+            "—" if row.cost_per_1k is None else f"${row.cost_per_1k:.3f}",
+            "—" if row.latency_p95_ms is None else f"{row.latency_p95_ms:.0f}ms",
+            "★" if row.on_pareto_front else "",
+        )
+    console.print(table)
+
+
+@app.command()
 def doctor(
     target: Annotated[
         str | None, typer.Option("--target", "-t", help="Also measure detectors against this sim target")
@@ -234,6 +386,95 @@ def doctor(
     else:
         err.print("[bold red]✗ some grader checks failed[/bold red]")
         raise typer.Exit(1)
+
+
+@app.command("gate-changed")
+def gate_changed(
+    base: Annotated[
+        str, typer.Option("--base", help="Git ref to compare against, e.g. origin/main")
+    ] = "origin/main",
+    policy: Annotated[str, typer.Option("--policy", "-p")] = "release",
+    all_targets: Annotated[
+        bool, typer.Option("--all", help="Gate every target, not just changed ones")
+    ] = False,
+    sample: Annotated[int | None, typer.Option(help="Sample N cases per suite")] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    out_dir: Annotated[Path, typer.Option("--out-dir")] = Path("gate-out"),
+) -> None:
+    """Gate every agent a PR changed (vs --base). Exit 0 PASS/WARN, 1 FAIL, 2 pipeline error."""
+    from .affected import affected_targets
+    from .engine import gate_target
+    from .gate import EXIT_ERROR, EXIT_FAIL, EXIT_OK
+    from .report.compare_report import render_gate_html, render_gate_markdown
+
+    cfg = _load(config)
+    try:
+        affected = affected_targets(cfg, base)
+    except Exception as exc:
+        err.print(f"[red]cannot determine changed agents:[/red] {exc}")
+        raise typer.Exit(EXIT_ERROR) from exc
+    names = sorted(cfg.all_targets()) if all_targets else affected.changed
+    out_dir.mkdir(parents=True, exist_ok=True)
+    console.print(
+        f"changed: {affected.changed or '-'}  added: {affected.added or '-'}  removed: {affected.removed or '-'}"
+    )
+    if not names and not affected.added:
+        (out_dir / "report.md").write_text(
+            "## ✅ Quality gate: no agent changes\n\nNo AI agent configuration changed in this PR, so nothing to evaluate.\n",
+            encoding="utf-8",
+        )
+        console.print("[green]No agent changes; gate skipped.[/green]")
+        raise typer.Exit(EXIT_OK)
+
+    settings = settings_from_config(cfg, sample=sample)
+    code = EXIT_OK
+    sections: list[str] = []
+    summaries = []
+    for name in [*names, *affected.added]:
+        is_new = name in affected.added
+        try:
+            result, comparison, candidate, _ = asyncio.run(
+                gate_target(
+                    cfg,
+                    name,
+                    policy,
+                    baseline_override="none" if is_new else f"rerun:{base}",
+                    settings=settings,
+                )
+            )
+        except Exception as exc:
+            err.print(f"[red]{name}: pipeline error:[/red] {type(exc).__name__}: {exc}")
+            code = EXIT_ERROR
+            sections.append(f"## ❌ `{name}`: pipeline error\n\n`{type(exc).__name__}: {exc}`\n")
+            continue
+        target_dir = out_dir / name
+        target_dir.mkdir(parents=True, exist_ok=True)
+        md = render_gate_markdown(result, comparison, candidate)
+        (target_dir / "report.md").write_text(md, encoding="utf-8")
+        (target_dir / "report.html").write_text(
+            render_gate_html(result, comparison, candidate), encoding="utf-8"
+        )
+        (target_dir / "summary.json").write_text(result.model_dump_json(indent=1), encoding="utf-8")
+        sections.append(md)
+        summaries.append({"target": name, "verdict": str(result.verdict), "exit_code": result.exit_code})
+        console.print(f"  {name}: {result.verdict} (exit {result.exit_code})")
+        if result.exit_code == EXIT_ERROR:
+            code = EXIT_ERROR
+        elif result.exit_code == EXIT_FAIL and code != EXIT_ERROR:
+            code = EXIT_FAIL
+    (out_dir / "report.md").write_text("\n---\n\n".join(sections), encoding="utf-8")
+    import json
+
+    (out_dir / "summary.json").write_text(
+        json.dumps({"exit_code": code, "targets": summaries}, indent=1), encoding="utf-8"
+    )
+    verdict = {
+        0: "[bold green]PASS[/bold green]",
+        1: "[bold red]FAIL - merge blocked[/bold red]",
+        2: "[bold yellow]ERROR[/bold yellow]",
+    }[code]
+    console.print(f"Overall: {verdict}")
+    raise typer.Exit(code)
 
 
 def main() -> None:

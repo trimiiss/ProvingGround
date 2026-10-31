@@ -1,0 +1,56 @@
+name: deploy
+
+# Deployment is gated on the quality gate: the `deploy` job needs `gate`, so a regression on
+# main (for example from a change merged without the required check) stops the release.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Pick the comparison base
+        id: base
+        shell: bash
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "ref=$BEFORE" >> "$GITHUB_OUTPUT"
+            echo "all=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=HEAD" >> "$GITHUB_OUTPUT"
+            echo "all=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: ./.github/actions/provingground-gate
+        with:
+          base: ${{ steps.base.outputs.ref }}
+          all-targets: ${{ steps.base.outputs.all }}
+          comment: "false"
+
+  deploy:
+    needs: gate
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+      - name: Deploy
+        run: |
+          echo "Quality gate passed - deploying ${GITHUB_SHA::7} to production."
+          # Replace this step with your real deployment (container push, helm upgrade, ...).

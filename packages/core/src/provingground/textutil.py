@@ -138,6 +138,18 @@ STOPWORDS = frozenset(
         "don't",
         "isn't",
         "aren't",
+        "couldn't",
+        "wouldn't",
+        "shouldn't",
+        "didn't",
+        "doesn't",
+        "won't",
+        "wasn't",
+        "haven't",
+        "it'd",
+        "that's",
+        "here's",
+        "let's",
     ]
 )
 
@@ -155,14 +167,189 @@ def words(text: str) -> list[str]:
 
 
 def stem(word: str) -> str:
+    """A tiny suffix stripper. Also drops a final 'e' so exchange/exchanged/exchanges agree."""
     for suffix in ("ing", "ies", "ed", "es", "s"):
         if len(word) > len(suffix) + 3 and word.endswith(suffix):
-            return word[: -len(suffix)] + ("y" if suffix == "ies" else "")
+            word = word[: -len(suffix)] + ("y" if suffix == "ies" else "")
+            break
+    if len(word) > 4 and word.endswith("e"):
+        word = word[:-1]
+    if len(word) > 4 and word[-1] == word[-2] and word[-1] not in "aeiou":
+        word = word[:-1]  # cancelled -> cancel, shipping -> ship
     return word
 
 
 def content_words(text: str) -> list[str]:
     return [stem(w) for w in words(text) if w not in STOPWORDS and not w.isdigit()]
+
+
+# Words that frame a question ("how long", "what's the window", "I couldn't find it on the
+# website") rather than name its subject. Retrieval and answer selection weight them down so a
+# document matching "as long as" can't outrank the one about tents.
+FRAMING_WORDS = frozenset(
+    stem(w)
+    for w in [
+        "policy",
+        "policies",
+        "rule",
+        "rules",
+        "cost",
+        "costs",
+        "price",
+        "long",
+        "time",
+        "day",
+        "days",
+        "need",
+        "get",
+        "can",
+        "much",
+        "many",
+        "offer",
+        "offered",
+        "available",
+        "item",
+        "items",
+        "order",
+        "orders",
+        "product",
+        "products",
+        "store",
+        "stores",
+        "acme",
+        "outfitter",
+        "outfitters",
+        "take",
+        "work",
+        "allow",
+        "allowed",
+        "bought",
+        "buy",
+        "buying",
+        "purchase",
+        "purchased",
+        "week",
+        "weeks",
+        "ago",
+        "month",
+        "months",
+        "year",
+        "years",
+        "yesterday",
+        "today",
+        "still",
+        "ever",
+        "wonder",
+        "wondering",
+        "tell",
+        "know",
+        "question",
+        "thanks",
+        "please",
+        "quick",
+        "could",
+        "would",
+        "help",
+        "hi",
+        "hello",
+        "hey",
+        "there",
+        "want",
+        "like",
+        "something",
+        "anything",
+        "thing",
+        "things",
+        "info",
+        "information",
+        "happen",
+        "happens",
+        "possible",
+        "way",
+        "ways",
+        "able",
+        "usually",
+        "typically",
+        "exactly",
+        "really",
+        "pretty",
+        "kind",
+        "sort",
+        "make",
+        "made",
+        "use",
+        "using",
+        "used",
+        "go",
+        "going",
+        "come",
+        "also",
+        "window",
+        "windows",
+        "hour",
+        "hours",
+        "allowance",
+        "cycle",
+        "deadline",
+        "duration",
+        "period",
+        "timeframe",
+        "requirement",
+        "requirements",
+        "eligibility",
+        "option",
+        "options",
+        "limit",
+        "maximum",
+        "minimum",
+        "threshold",
+        "process",
+        "processed",
+        "step",
+        "steps",
+        "detail",
+        "details",
+        "number",
+        "amount",
+        "rate",
+        "fee",
+        "fees",
+        "charge",
+        "charges",
+        "length",
+        "open",
+        "close",
+        "how",
+        "what",
+        "when",
+        "where",
+        "which",
+        "cover",
+        "covered",
+        "covers",
+        "covering",
+        "provide",
+        "provided",
+        "give",
+        "given",
+        "receive",
+        "received",
+        "find",
+        "found",
+        "website",
+        "site",
+        "page",
+        "online",
+        "sure",
+        "okay",
+    ]
+)
+
+FRAMING_WEIGHT = 0.1
+
+
+def term_weight(word: str) -> float:
+    return FRAMING_WEIGHT if word in FRAMING_WORDS else 1.0
 
 
 def sentences(text: str) -> list[str]:

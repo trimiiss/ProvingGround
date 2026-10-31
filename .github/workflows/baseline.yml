@@ -1,0 +1,56 @@
+name: baseline
+
+# Full evaluation of every agent on main (and nightly). Catches silent drift - for example a
+# provider updating a model behind the same name - that a diff-based PR gate cannot see.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+
+      - name: Restore response cache
+        uses: actions/cache@v4
+        with:
+          path: .provingground/cache
+          key: pground-cache-${{ github.sha }}
+          restore-keys: pground-cache-
+
+      - name: Evaluate every agent
+        shell: bash
+        run: |
+          targets=$(uv run python -c "from provingground.config import load_config; print(' '.join(sorted(load_config().all_targets())))")
+          for t in $targets; do
+            echo "::group::$t"
+            uv run pground run --target "$t" --label "ref=${GITHUB_SHA}"
+            echo "::endgroup::"
+          done
+          {
+            echo "## Baseline evaluation of main @ ${GITHUB_SHA::7}"
+            echo
+            echo '```'
+            uv run pground list runs
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload run results
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-runs-${{ github.sha }}
+          path: .provingground/runs/
+          retention-days: 30
