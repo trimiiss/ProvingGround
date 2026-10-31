@@ -128,7 +128,8 @@ async def history(cfg, days: int, sample: int, rng: random.Random) -> int:  # ty
             when = (now - timedelta(days=d)).replace(
                 hour=3, minute=rng.randint(0, 40), second=rng.randint(0, 59)
             )
-            model = model_on(slug, d, spec.model)
+            # Model changes go live after the 14:10 gate, so the 03:xx nightly still runs the old model.
+            model = model_on(slug, d + 1, spec.model)
             settings = settings_from_config(cfg, sample=sample, seed=d + 1, use_cache=False, n_boot=300)
             run = await run_target(
                 cfg, slug, settings=settings, overrides={"model": model}, labels={"kind": "eval"}
@@ -185,7 +186,7 @@ async def redteam_runs(cfg, days: int) -> None:  # type: ignore[no-untyped-def]
             continue
         for d in range(days - 1, -1, -7):
             when = (now - timedelta(days=d)).replace(hour=4, minute=30, second=0)
-            model = model_on(slug, d, spec.model)
+            model = model_on(slug, d + 1, spec.model)
             settings = settings_from_config(cfg, use_cache=False, n_boot=200)
             run = await run_target(
                 cfg,
@@ -253,7 +254,7 @@ async def main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--days", type=int, default=30)
-    parser.add_argument("--sample", type=int, default=14, help="cases per suite per nightly run")
+    parser.add_argument("--sample", type=int, default=30, help="cases per suite per nightly run")
     parser.add_argument("--traffic-hours", type=int, default=24)
     parser.add_argument("--traffic-scale", type=float, default=1.0)
     parser.add_argument(

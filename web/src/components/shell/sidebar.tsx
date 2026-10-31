@@ -3,7 +3,7 @@
 import { ExternalLink, Menu } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -39,8 +39,20 @@ function Brand() {
   );
 }
 
+/** Reads the pathname for the active-link highlight. Isolated so the rest of the shell can prerender. */
+function ActiveNav({ onNavigate }: { onNavigate?: () => void }) {
+  return <NavList pathname={usePathname()} onNavigate={onNavigate} />;
+}
+
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
-  const pathname = usePathname();
+  return (
+    <Suspense fallback={<NavList pathname="" onNavigate={onNavigate} />}>
+      <ActiveNav onNavigate={onNavigate} />
+    </Suspense>
+  );
+}
+
+function NavList({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   const active = (href: string) =>
     href === "/" ? pathname === "/" || pathname.startsWith("/agents") : pathname.startsWith(href);
   return (

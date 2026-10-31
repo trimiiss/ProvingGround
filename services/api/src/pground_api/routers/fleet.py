@@ -154,6 +154,11 @@ async def online_scores(session: Session) -> dict[str, dict[str, float]]:
     return out
 
 
+#: Runs that describe what is in production. Release-gate runs (labelled ``role``: baseline or
+#: candidate) evaluate configurations that may never ship, so health and trends leave them out.
+MONITORED = ~db.Run.labels.has_key("role")
+
+
 @router.get("/overview", response_model=Overview)
 async def overview(session: Session) -> Overview:
     agents = (await session.execute(select(db.Agent).order_by(db.Agent.slug))).scalars().all()
@@ -163,7 +168,7 @@ async def overview(session: Session) -> Overview:
             await session.execute(
                 select(db.Run)
                 .distinct(db.Run.agent)
-                .where(db.Run.kind == "eval")
+                .where(db.Run.kind == "eval", MONITORED)
                 .order_by(db.Run.agent, db.Run.created_at.desc())
             )
         ).scalars()
@@ -277,7 +282,7 @@ async def get_agent(slug: str, session: Session) -> AgentHealth:
     run = (
         await session.execute(
             select(db.Run)
-            .where(db.Run.agent == slug, db.Run.kind == "eval")
+            .where(db.Run.agent == slug, db.Run.kind == "eval", MONITORED)
             .order_by(db.Run.created_at.desc())
             .limit(1)
         )
@@ -321,7 +326,7 @@ async def agent_trend(
     rows = (
         await session.execute(
             select(db.Run.id, db.Run.created_at, db.Run.model, db.Run.metrics)
-            .where(db.Run.agent == slug, db.Run.kind == kind, db.Run.created_at > since)
+            .where(db.Run.agent == slug, db.Run.kind == kind, db.Run.created_at > since, MONITORED)
             .order_by(db.Run.created_at)
         )
     ).all()

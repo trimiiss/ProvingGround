@@ -157,6 +157,17 @@ async def test_compare_and_gate_through_the_api(client: httpx.AsyncClient) -> No
     assert agent["gate"]["verdict"] == verdict_good["verdict"] and agent["latest_run"] is not None
     assert (await client.get("/v1/gates/evaluate-missing")).status_code == 404
 
+    # a dry run returns the verdict without adding to the gate history
+    dry = await client.post(
+        "/v1/gates/evaluate",
+        params={"record": "false"},
+        json={"policy": "release", "candidate_run_id": bad.id, "baseline_run_id": base.id},
+    )
+    assert dry.json()["verdict"] == "FAIL"
+    assert len((await client.get("/v1/gates/evaluations", params={"agent": "support-bot"})).json()) == len(
+        history
+    )
+
 
 # --- jobs ------------------------------------------------------------------------------------
 

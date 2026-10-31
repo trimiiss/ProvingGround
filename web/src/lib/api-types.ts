@@ -2829,7 +2829,10 @@ export interface operations {
     };
     evaluate_v1_gates_evaluate_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description store the verdict in the gate history */
+                record?: boolean;
+            };
             header?: {
                 "x-api-key"?: string | null;
             };

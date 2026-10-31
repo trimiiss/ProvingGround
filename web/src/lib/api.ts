@@ -1,5 +1,6 @@
 import "server-only";
 
+import { notFound } from "next/navigation";
 import type { components } from "./api-types";
 
 /** Server-side client for the ProvingGround API. The admin key lives here and never reaches the browser. */
@@ -60,6 +61,26 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError(`API ${res.status} on ${path}: ${detail.slice(0, 300)}`, res.status);
   }
   return res.json() as Promise<T>;
+}
+
+/** Resolve a request, turning a 404 from the API into the Next.js not-found page. */
+export async function orNotFound<T>(request: Promise<T>): Promise<T> {
+  try {
+    return await request;
+  } catch (e) {
+    if (e instanceof ApiError && (e.status === 404 || e.status === 422)) notFound();
+    throw e;
+  }
+}
+
+/** Resolve a request, or null when the API has nothing for it. */
+export async function orNull<T>(request: Promise<T>): Promise<T | null> {
+  try {
+    return await request;
+  } catch (e) {
+    if (e instanceof ApiError && e.status < 500) return null;
+    throw e;
+  }
 }
 
 type Query = Record<string, string | number | boolean | null | undefined>;
@@ -140,3 +161,10 @@ export interface DatasetCase {
   critical?: boolean;
   metadata?: Record<string, unknown>;
 }
+
+/** Evaluate a candidate run against a gate policy without writing to the gate history. */
+export const evaluateGate = (policy: string, candidate: string, baseline: string | null) =>
+  api<GateResult>("/v1/gates/evaluate?record=false", {
+    method: "POST",
+    body: JSON.stringify({ policy, candidate_run_id: candidate, baseline_run_id: baseline }),
+  });

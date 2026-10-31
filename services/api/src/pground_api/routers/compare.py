@@ -94,7 +94,11 @@ async def put_policy(name: str, policy: GatePolicy, session: Session) -> GatePol
 
 
 @router.post("/gates/evaluate", response_model=GateResult)
-async def evaluate(body: GateEvaluateIn, session: Session) -> GateResult:
+async def evaluate(
+    body: GateEvaluateIn,
+    session: Session,
+    record: Annotated[bool, Query(description="store the verdict in the gate history")] = True,
+) -> GateResult:
     policy = await policy_for(session, body.policy)
     candidate = await store.load_run(session, body.candidate_run_id)
     if candidate is None:
@@ -106,7 +110,8 @@ async def evaluate(body: GateEvaluateIn, session: Session) -> GateResult:
             raise HTTPException(404, f"run {body.baseline_run_id!r} not found")
         comparison = compare_runs(baseline, candidate, confidence=policy.confidence)
     result = evaluate_gate(policy, body.policy, candidate, comparison)
-    await record_gate(session, result)
+    if record:
+        await record_gate(session, result)
     return result
 
 

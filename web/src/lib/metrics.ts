@@ -90,3 +90,30 @@ export const toneClass: Record<Tone, string> = {
   bad: "text-danger",
   neutral: "text-foreground",
 };
+
+/** The metric that best represents "quality" for a run (agents measure different things). */
+const QUALITY_ORDER = ["quality.correctness", "quality.field_accuracy", "quality.tool_use", "quality.relevance"];
+export function primaryQuality(metrics: Record<string, number> | undefined): { name: string; value: number } | null {
+  for (const name of QUALITY_ORDER) if (metrics?.[name] !== undefined) return { name, value: metrics[name] };
+  return null;
+}
+
+/** Metrics charted over time on an agent page, with the chart format for each. */
+export const TREND_METRICS: { metric: string; format: "pct" | "ms" | "usd" }[] = [
+  { metric: "quality.correctness", format: "pct" },
+  { metric: "quality.field_accuracy", format: "pct" },
+  { metric: "quality.tool_use", format: "pct" },
+  { metric: "factuality.faithfulness", format: "pct" },
+  { metric: "safety.attack_success_rate", format: "pct" },
+  { metric: "perf.latency_p95_ms", format: "ms" },
+  { metric: "cost.per_1k_requests_usd", format: "usd" },
+];
+
+export const FAMILY_LABEL: Record<string, string> = {
+  quality: "Quality",
+  factuality: "Factual accuracy",
+  safety: "Safety",
+  perf: "Performance",
+  cost: "Cost",
+  reliability: "Reliability",
+};
