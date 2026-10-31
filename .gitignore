@@ -25,3 +25,4 @@ web/playwright-report/
 .env.local
 .DS_Store
 Thumbs.db
+web/.env.local
