@@ -208,6 +208,28 @@ def record_llm_result(
         span.set_attribute("pground.output", _clip(output_text))
 
 
+def record_io(
+    span: Span,
+    *,
+    input_text: str | None = None,
+    output_text: str | None = None,
+    docs: list[str] | None = None,
+) -> None:
+    """Attach the user input / answer / retrieved documents to a span (when content tracing is on).
+
+    These attributes power the trace explorer and the "add production incident to a dataset" flow.
+    Set ``PGROUND_TRACE_CONTENT=0`` to keep prompts and answers out of traces entirely.
+    """
+    if not _TRACE_CONTENT:
+        return
+    if input_text is not None:
+        span.set_attribute("pground.input", _clip(input_text))
+    if output_text is not None:
+        span.set_attribute("pground.output", _clip(output_text))
+    if docs is not None:
+        span.set_attribute("pground.retrieval.docs", [_clip(d) for d in docs[:8]])
+
+
 @contextmanager
 def tool_span(name: str, call_id: str | None = None, arguments: Any = None) -> Iterator[Span]:
     tracer = get_tracer()

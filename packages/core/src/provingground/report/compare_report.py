@@ -12,7 +12,13 @@ from ..models import Run
 from .common import metric_label
 from .html import html_shell
 
-_VERDICT_EMOJI = {Verdict.PASS: "✅", Verdict.WARN: "⚠️", Verdict.FAIL: "❌", Verdict.INCONCLUSIVE: "❔"}
+_VERDICT_EMOJI = {
+    Verdict.PASS: "✅",
+    Verdict.WARN: "⚠️",
+    Verdict.FAIL: "❌",
+    Verdict.INCONCLUSIVE: "❔",
+    Verdict.NA: "➖",
+}
 _VERDICT_WORD = {Verdict.PASS: "PASSED", Verdict.WARN: "PASSED WITH WARNINGS", Verdict.FAIL: "BLOCKED",
                  Verdict.INCONCLUSIVE: "INCONCLUSIVE"}  # fmt: skip
 
@@ -77,7 +83,13 @@ def render_gate_markdown(result: GateResult, comparison: Comparison | None, cand
 
 # --- HTML ------------------------------------------------------------------------------------
 
-_V_CLASS = {Verdict.PASS: "ok", Verdict.WARN: "wn", Verdict.FAIL: "err", Verdict.INCONCLUSIVE: "wn"}
+_V_CLASS = {
+    Verdict.PASS: "ok",
+    Verdict.WARN: "wn",
+    Verdict.FAIL: "err",
+    Verdict.INCONCLUSIVE: "wn",
+    Verdict.NA: "ok",
+}
 
 
 def render_gate_html(result: GateResult, comparison: Comparison | None, candidate: Run) -> str:

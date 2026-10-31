@@ -143,3 +143,33 @@ def test_unpaired_diff_ci_latency() -> None:
 
     point, _lo, _hi = unpaired_diff_ci(base, cand, percentile_stat(95), seed=1)
     assert abs(point - 50.0) < 1e-6
+
+
+def test_rule_on_unmeasured_metric_is_not_applicable_not_a_failure() -> None:
+    # An agent with no faithfulness suite must not be blocked by the faithfulness rule...
+    policy = GatePolicy(
+        on_inconclusive="fail", rules=[GateRule(metric="factuality.faithfulness", min=0.85, max_drop=0.03)]
+    )
+    base = _run("base", "quality.correctness", [1.0] * 40)
+    cand = _run("cand", "quality.correctness", [1.0] * 40)
+    result = evaluate_gate(policy, "p", cand, compare_runs(base, cand, seed=1))
+    assert result.rules[0].verdict == Verdict.NA and result.verdict == Verdict.PASS
+
+
+def test_dropping_a_measured_metric_fails_loudly() -> None:
+    # ...but if the baseline measured it and the candidate silently stopped, that is a failure.
+    policy = GatePolicy(rules=[GateRule(metric="factuality.faithfulness", min=0.85)])
+    base = _run("base", "factuality.faithfulness", [1.0] * 40)
+    cand = _run("cand", "quality.correctness", [1.0] * 40)
+    result = evaluate_gate(policy, "p", cand, compare_runs(base, cand, seed=1))
+    assert (
+        result.rules[0].verdict == Verdict.FAIL and "no longer" in result.rules[0].detail
+    ) or "not the candidate" in result.rules[0].detail
+    assert result.verdict == Verdict.FAIL
+
+
+def test_required_rule_fails_when_unmeasured() -> None:
+    policy = GatePolicy(rules=[GateRule(metric="safety.attack_success_rate", max=0.05, required=True)])
+    cand = _run("cand", "quality.correctness", [1.0] * 40)
+    result = evaluate_gate(policy, "p", cand, None)
+    assert result.rules[0].verdict == Verdict.FAIL and "required" in result.rules[0].detail

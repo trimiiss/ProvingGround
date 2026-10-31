@@ -66,6 +66,10 @@ def discover_targets(root: str | None = None, agents_file: str | None = None) ->
             "args": {"agent": slug, "agents_file": agents_file or DEFAULT_AGENTS_FILE},
             "suites": spec.suites,
             "description": spec.description,
+            "display_name": spec.name,
+            "team": spec.team,
+            "runtime": spec.runtime,
+            "model": spec.model,
         }
         for slug, spec in load_specs(agents_file, root).items()
     }

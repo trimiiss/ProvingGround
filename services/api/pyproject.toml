@@ -3,7 +3,22 @@ name = "provingground-api"
 version = "0.1.0"
 description = "ProvingGround platform server: REST API, OTLP trace ingest, worker, Prometheus metrics"
 requires-python = ">=3.12"
-dependencies = ["provingground"]
+dependencies = [
+    "provingground",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "prometheus-client>=0.21",
+    "croniter>=3.0",
+    "pydantic-settings>=2.5",
+    "opentelemetry-proto>=1.27",
+    "python-multipart>=0.0.9",
+]
+
+[project.scripts]
+pground-api = "pground_api.cli:main"
 
 [build-system]
 requires = ["hatchling"]

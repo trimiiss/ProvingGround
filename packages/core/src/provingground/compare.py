@@ -130,6 +130,8 @@ class Comparison(BaseModel):
     flips: list[Flip] = []
     comparability: list[ComparabilityIssue] = []
     noise_floor: dict[str, float] = {}
+    baseline_metrics: list[str] = []
+    candidate_metrics: list[str] = []
 
     def delta(self, metric: str) -> MetricDelta | None:
         return self.deltas.get(metric)
@@ -180,6 +182,8 @@ def compare_runs(
         n_candidate_only=len(set(cand_aggs) - set(base_aggs)),
     )  # fmt: skip
     comp.comparability = check_comparability(baseline, candidate, comp)
+    comp.baseline_metrics = sorted(baseline.summary.metrics)
+    comp.candidate_metrics = sorted(candidate.summary.metrics)
     if not common:
         return comp
 

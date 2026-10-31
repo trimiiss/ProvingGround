@@ -79,6 +79,11 @@ class TargetConfig(BaseModel):
     kind: Literal["model", "python", "http"]
     description: str = ""
     suites: list[str] = Field(default_factory=list)
+    # descriptive metadata shown in the dashboard
+    fleet: bool = True  # False: a test fixture / alias, not a monitored agent
+    display_name: str | None = None
+    team: str | None = None
+    runtime: str | None = None
     # kind: model
     model: str | None = None
     system_prompt: str | None = None
@@ -158,6 +163,8 @@ class GateRule(BaseModel):
     max_increase: float | str | None = None
     critical_cases: Literal["must_pass"] | None = None
     severity: Literal["block", "warn"] = "block"
+    # A rule on a metric nobody measures is "N/A" - unless required, which makes it fail instead.
+    required: bool = False
 
     @model_validator(mode="after")
     def _shape(self) -> GateRule:

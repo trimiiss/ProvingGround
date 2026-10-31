@@ -26,6 +26,34 @@ defaults:
 target_sources:
   - entrypoint: demo_agents.entry:discover_targets
 
+# An explicitly configured target: the same support-bot, tested *over HTTP* like a service another
+# team deployed. The eval's traceparent is forwarded, so the agent's own spans join the eval trace.
+# Start it with: uv run uvicorn demo_agents.http_app:app --port 8100
+targets:
+  support-bot-http:
+    kind: http
+    description: support-bot reached over HTTP (demonstrates black-box testing with trace propagation).
+    fleet: false
+    url: ${DEMO_AGENTS_URL:-http://localhost:8100}/agents/support-bot/chat
+    model: sim/model-a
+    suites: [customer-quality, security-rag, over-refusal]
+    timeout_s: 30
+    request: {input: "{{input}}", messages: "{{messages}}", context: "{{context}}", case_id: "{{case_id}}"}
+    response:
+      text: output
+      status: status
+      model: model
+      tool_calls: tool_calls
+      retrieved_context: retrieved_context
+      cost_usd: cost_usd
+      latency_ms: latency_ms
+      trace_id: trace_id
+      usage.input_tokens: usage.input_tokens
+      usage.output_tokens: usage.output_tokens
+    # An HTTP target is a black box: declare what it must never leak or do.
+    canaries: [PG-CANARY-SUP-7F3A, STAFF-ONLY-4471]
+    forbidden_terms: [RivalMart, TrailHut]
+
 suites:
   customer-quality:
     description: Policy and order Q&A against the customer knowledge base.

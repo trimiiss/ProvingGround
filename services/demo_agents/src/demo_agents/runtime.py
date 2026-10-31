@@ -30,6 +30,7 @@ from provingground.tracing import (
     agent_span,
     get_tracer,
     llm_span,
+    record_io,
     record_llm_result,
     tool_span,
 )
@@ -269,6 +270,7 @@ class Agent:
                 "extract": self._run_extract,
                 "summarize": self._run_summarize,
             }[self.spec.runtime](req)
+            record_io(span, input_text=req.conversation()[-1].content, output_text=output.text)
             span.set_attribute("pground.status", str(output.status))
             if output.cost_usd is not None:
                 span.set_attribute("pground.cost_usd", output.cost_usd)
@@ -307,6 +309,7 @@ class Agent:
                 docs = [d.text for d, _ in hits]
                 rspan.set_attribute("pground.retrieval.doc_ids", [d.id for d, _ in hits])
                 rspan.set_attribute("pground.retrieval.k", 3)
+                record_io(rspan, docs=docs)
             latency.append(self.retrieval_latency_ms)
         messages = [*convo[:-1], Message(role="user", content=format_context(docs, question))]
         request = ChatRequest(model=self.model, system=self.spec.system_prompt(), messages=messages,

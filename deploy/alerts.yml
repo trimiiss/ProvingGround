@@ -1,0 +1,86 @@
+# Alert rules for the ProvingGround fleet. Event metrics (rates, latency, cost) come from
+# ingested traces; state metrics (eval scores, gate verdicts) are read from PostgreSQL at scrape time.
+groups:
+  - name: pground-quality
+    rules:
+      - alert: AgentQualityLow
+        expr: pground_eval_score{metric="quality.correctness"} < 0.70
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.agent }}: correctness {{ $value | humanizePercentage }} (< 70%)"
+          description: "The latest evaluation of {{ $labels.agent }} on {{ $labels.model }} scored below the 70% correctness floor."
+
+      - alert: AgentHallucinationHigh
+        expr: pground_eval_score{metric="factuality.hallucination_rate"} > 0.12
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.agent }}: hallucination rate {{ $value | humanizePercentage }}"
+
+      - alert: AgentAttackSuccessHigh
+        expr: pground_attack_success_rate > 0.10
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.agent }} loses {{ $value | humanizePercentage }} of red-team attacks"
+          description: "More than 10% of attacks in the latest red-team campaign succeeded (canary leaks, unauthorized actions, injected content)."
+
+      - alert: QualityGateFailing
+        expr: pground_gate_status == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.agent }}: the last release gate FAILED"
+
+      - alert: OnlineFaithfulnessLow
+        expr: pground_online_score{metric="factuality.faithfulness"} < 0.80
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.agent }}: live answers are {{ $value | humanizePercentage }} faithful to their sources"
+
+  - name: pground-reliability
+    rules:
+      - alert: AgentErrorRateHigh
+        expr: |
+          sum by (agent) (rate(pground_agent_requests_total{status="error"}[5m]))
+            / sum by (agent) (rate(pground_agent_requests_total[5m])) > 0.05
+          and sum by (agent) (rate(pground_agent_requests_total[5m])) > 0.05
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.agent }}: {{ $value | humanizePercentage }} of requests failing"
+
+      - alert: AgentLatencyP95High
+        expr: |
+          histogram_quantile(0.95, sum by (le, agent) (rate(pground_agent_latency_seconds_bucket[5m]))) > 5
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.agent }}: p95 latency {{ $value | humanizeDuration }}"
+
+      - alert: LLMCostSpike
+        expr: |
+          sum by (agent) (rate(pground_llm_cost_usd_total[15m]))
+            > 2 * sum by (agent) (rate(pground_llm_cost_usd_total[15m] offset 1h)) and sum by (agent) (rate(pground_llm_cost_usd_total[15m])) > 0
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.agent }}: spend is more than double the rate an hour ago"
+
+  - name: pground-platform
+    rules:
+      - alert: PlatformAPIDown
+        expr: up{job="pground-api"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "The ProvingGround API is unreachable"
+
+      - alert: EvaluationJobsBacklog
+        expr: pground_jobs{status="queued"} > 10
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $value }} evaluation jobs are waiting; is a worker running?"

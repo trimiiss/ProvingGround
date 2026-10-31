@@ -25,6 +25,7 @@ class Verdict(StrEnum):
     WARN = "WARN"
     FAIL = "FAIL"
     INCONCLUSIVE = "INCONCLUSIVE"
+    NA = "N/A"  # the rule's metric is not measured for this agent
 
 
 EXIT_OK = 0
@@ -180,6 +181,10 @@ def evaluate_gate(
                                            detail=detail, threshold="critical cases"))  # fmt: skip
             continue
         delta = deltas.get(rule.metric or "")
+        coverage = _coverage(rule, candidate, comparison)
+        if coverage is not None:
+            rule_results.append(coverage)
+            continue
         verdicts: list[Verdict] = []
         details: list[str] = []
         if rule.min is not None or rule.max is not None:
@@ -209,6 +214,27 @@ def evaluate_gate(
         candidate_id=candidate.id, baseline_id=comparison.baseline_id if comparison else None,
         rules=rule_results, comparability_blocks=blocks, notes=notes,
     )  # fmt: skip
+
+
+def _coverage(rule: GateRule, candidate: Run, comparison: Comparison | None) -> RuleResult | None:
+    """Handle a rule whose metric the candidate did not measure.
+
+    Not measured by either run -> the rule does not apply (N/A). Measured by the baseline but not
+    the candidate -> someone dropped a test: that must fail loudly, never pass silently.
+    """
+    assert rule.metric
+    measured = rule.metric in candidate.summary.metrics
+    if measured:
+        return None
+    was_measured = comparison is not None and rule.metric in comparison.baseline_metrics
+    if was_measured or rule.required:
+        why = (
+            "measured by the baseline but not the candidate" if was_measured else "required but not measured"
+        )
+        return RuleResult(rule=rule.label, metric=rule.metric, verdict=Verdict.FAIL, severity=rule.severity,
+                          threshold=_threshold_text(rule), detail=f"metric {why}")  # fmt: skip
+    return RuleResult(rule=rule.label, metric=rule.metric, verdict=Verdict.NA, severity=rule.severity,
+                      threshold=_threshold_text(rule), detail="not measured for this agent")  # fmt: skip
 
 
 def _threshold_text(rule: GateRule) -> str:

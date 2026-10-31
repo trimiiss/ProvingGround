@@ -99,7 +99,7 @@ class HttpTarget(Target):
         values = {
             "input": case.prompt_text,
             "messages": [m.model_dump(mode="json", exclude_none=True) for m in case.conversation()],
-            "context": case.context or [],
+            "context": case.context,  # None (-> JSON null) means "retrieve it yourself"
             "case_id": case.id,
             "metadata": case.metadata,
             "tags": case.tags,

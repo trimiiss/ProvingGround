@@ -434,6 +434,35 @@ def redteam(
     console.print(f"[green]wrote {directory / 'redteam.html'}[/green]")
 
 
+@app.command()
+def push(
+    run_ref: Annotated[str, typer.Argument(help="Run id, path, or 'latest'")] = "latest",
+    label: Annotated[
+        list[str] | None, typer.Option("--label", help="Add key=value labels, e.g. --label ref=main")
+    ] = None,
+    url: Annotated[str | None, typer.Option(envvar="PGROUND_API_URL")] = None,
+    api_key: Annotated[str | None, typer.Option(envvar="PGROUND_API_KEY")] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Upload a stored run to the platform (dashboard, history, and `api:` baselines)."""
+    from .client import PlatformClient, PlatformError
+
+    cfg = _load(config)
+    run_obj = RunStore(cfg.root).load(run_ref)
+    run_obj.labels = {**run_obj.labels, **{k: str(v) for k, v in _parse_overrides(label).items()}}
+    client = PlatformClient(url, api_key)
+    try:
+        brief = client.push_run(run_obj)
+    except PlatformError as exc:
+        err.print(f"[red]push failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    finally:
+        client.close()
+    console.print(
+        f"[green]pushed[/green] {brief['id']} to {client.base_url}  (agent {brief['agent']}, {brief['n_results']} results)"
+    )
+
+
 @app.command("inspect")
 def inspect_cmd(
     target: Annotated[str, typer.Option("--target", "-t")],

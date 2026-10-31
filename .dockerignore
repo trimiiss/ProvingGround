@@ -1,0 +1,13 @@
+.git
+.venv
+.provingground
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+web
+docs
+.github
+*.md
+!packages/core/README.md
+node_modules

@@ -53,11 +53,29 @@ async def resolve_baseline(
     if kind == "rerun":
         return await _rerun_baseline(arg, cfg, target, suites=suites, settings=settings, labels=labels)
     if kind == "api":
-        raise BaselineError(
-            "api: baselines require the ProvingGround platform (Phase 4); use rerun: or file: for now"
-        )
+        return _api_baseline(arg, target)
     # bare value: treat as a run id
     return RunStore(cfg.root).load(spec)
+
+
+def _api_baseline(arg: str, default_target: str) -> Run:
+    """``api:<agent>@<ref>`` - the newest stored eval run of the agent labelled ``ref=<ref>`` (default: main)."""
+    from .client import PlatformClient, PlatformError
+
+    agent, _, ref = arg.partition("@")
+    agent = agent or default_target
+    client = PlatformClient()
+    try:
+        run = client.latest_run(agent, label=f"ref={ref or 'main'}")
+    except PlatformError as exc:
+        raise BaselineError(str(exc)) from exc
+    finally:
+        client.close()
+    if run is None:
+        raise BaselineError(
+            f"the platform has no stored run of {agent!r} with label ref={ref or 'main'}; push one with `pground push --label ref=main`"
+        )
+    return run
 
 
 def _load_json(path: Path) -> Run:

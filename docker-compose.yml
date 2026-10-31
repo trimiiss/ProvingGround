@@ -1,5 +1,21 @@
 name: provingground
 
+# Full local stack:  docker compose up -d --build
+#   dashboard   http://localhost:3000     API/docs  http://localhost:8000/docs
+#   Grafana     http://localhost:3001     Prometheus http://localhost:9090
+# Seed demo data:    docker compose --profile tools run --rm seed
+# Generate traffic:  docker compose --profile traffic up -d traffic
+
+x-python: &python
+  build: .
+  image: provingground:dev
+  environment: &python-env
+    PGROUND_DATABASE_URL: postgresql+asyncpg://pground:pground@postgres:5432/pground
+    PGROUND_API_KEY: ${PGROUND_API_KEY:-dev-admin-key}
+    PGROUND_INGEST_KEY: ${PGROUND_INGEST_KEY:-dev-ingest-key}
+    PGROUND_CONFIG_PATH: /app/provingground.yaml
+    DEMO_AGENTS_URL: http://demo-agents:8100
+
 services:
   postgres:
     image: postgres:17
@@ -17,5 +33,88 @@ services:
       timeout: 3s
       retries: 20
 
+  api:
+    <<: *python
+    command: ["sh", "-c", "pground-api migrate && pground-api serve --host 0.0.0.0 --port 8000"]
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  worker:
+    <<: *python
+    command: ["pground-api", "worker"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  demo-agents:
+    <<: *python
+    command: ["uvicorn", "demo_agents.http_app:app", "--host", "0.0.0.0", "--port", "8100"]
+    environment:
+      <<: *python-env
+      PGROUND_OTLP_ENDPOINT: http://api:8000/v1/traces
+      PGROUND_SIM_TIME_SCALE: "${PGROUND_SIM_TIME_SCALE:-0.25}"
+    ports:
+      - "8100:8100"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=15d"]
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - promdata:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: system
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+
+  # --- on demand ---------------------------------------------------------------------------
+  seed:
+    <<: *python
+    profiles: ["tools"]
+    command: ["python", "scripts/seed.py", "--reset"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  traffic:
+    <<: *python
+    profiles: ["traffic"]
+    command: ["python", "scripts/traffic.py", "--url", "http://demo-agents:8100", "--rate", "3", "--duration", "0"]
+    depends_on:
+      - demo-agents
+
 volumes:
   pgdata:
+  promdata:
+  grafanadata:
