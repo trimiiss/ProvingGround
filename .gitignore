@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# ProvingGround local state (runs, caches, reports)
+.provingground/
+gate-out/
+
+# Node / Next.js
+node_modules/
+web/.next/
+web/out/
+web/test-results/
+web/playwright-report/
+
+# Env & OS
+.env
+.env.local
+.DS_Store
+Thumbs.db
