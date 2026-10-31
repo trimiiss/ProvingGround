@@ -206,6 +206,7 @@ class AgentRequest(BaseModel):
     messages: list[Message] | None = None
     context: list[str] | None = None
     case_id: str | None = None
+    sample: int = 0  # repeat index: re-rolls content faults in simulated models, like temperature
 
     def conversation(self) -> list[Message]:
         if self.messages:
@@ -309,7 +310,7 @@ class Agent:
             latency.append(self.retrieval_latency_ms)
         messages = [*convo[:-1], Message(role="user", content=format_context(docs, question))]
         request = ChatRequest(model=self.model, system=self.spec.system_prompt(), messages=messages,
-                              max_tokens=self.spec.max_tokens, metadata={"task": "rag"})  # fmt: skip
+                              max_tokens=self.spec.max_tokens, metadata={"task": "rag", "sample": req.sample})  # fmt: skip
         usage: list[Usage] = []
         resp = await self._chat(request, usage, latency)
         return self._finish(
@@ -336,7 +337,7 @@ class Agent:
         resp: ChatResponse | None = None
         for _ in range(self.max_steps):
             request = ChatRequest(model=self.model, system=self.spec.system_prompt(), messages=messages, tools=tools,
-                                  max_tokens=self.spec.max_tokens, metadata={"task": "tool"})  # fmt: skip
+                                  max_tokens=self.spec.max_tokens, metadata={"task": "tool", "sample": req.sample})  # fmt: skip
             resp = await self._chat(request, usage, latency)
             messages = [*messages, resp.as_assistant_message()]
             if not resp.tool_calls:
@@ -360,7 +361,7 @@ class Agent:
         convo = req.conversation()
         schema = SCHEMAS[self.spec.schema_name or "invoice"]
         request = ChatRequest(model=self.model, system=self.spec.system_prompt(), messages=convo, response_schema=schema,
-                              max_tokens=self.spec.max_tokens, metadata={"task": "extract"})  # fmt: skip
+                              max_tokens=self.spec.max_tokens, metadata={"task": "extract", "sample": req.sample})  # fmt: skip
         usage: list[Usage] = []
         latency: list[float] = []
         resp = await self._chat(request, usage, latency)
@@ -373,7 +374,7 @@ class Agent:
         content = format_context(docs, instruction) if docs else instruction
         messages = [*convo[:-1], Message(role="user", content=content)]
         request = ChatRequest(model=self.model, system=self.spec.system_prompt(), messages=messages,
-                              max_tokens=self.spec.max_tokens, metadata={"task": "summarize"})  # fmt: skip
+                              max_tokens=self.spec.max_tokens, metadata={"task": "summarize", "sample": req.sample})  # fmt: skip
         usage: list[Usage] = []
         latency: list[float] = []
         resp = await self._chat(request, usage, latency)

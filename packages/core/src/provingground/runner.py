@@ -112,7 +112,7 @@ async def score_case(
         return []
     scores: list[Score] = []
     for scorer in scorers:
-        if not scorer.applies(case, output):
+        if scorer.group or not scorer.applies(case, output):
             continue
         try:
             scores.extend(await scorer.score(case, output, ctx))
@@ -122,6 +122,42 @@ async def score_case(
                 scorer.make(metric, None, None, f"scorer error: {type(exc).__name__}: {exc}", error=True)
             )
     return scores
+
+
+async def apply_group_scorers(
+    results: list[CaseResult], suites: list[LoadedSuite], info: TargetInfo, judge: Judge
+) -> None:
+    """Run scorers that need all repeats of a case (needs repeats >= 2 to be meaningful)."""
+    for suite in suites:
+        group_scorers = [s for s in suite.scorers if s.group]
+        if not group_scorers:
+            continue
+        cases = {c.id: c for c in suite.cases}
+        by_case: dict[str, list[CaseResult]] = {}
+        for r in results:
+            if r.suite == suite.name and r.status in SCORABLE_STATUSES:
+                by_case.setdefault(r.case_id, []).append(r)
+        ctx = ScoreContext(target=info, judge=judge, suite=suite.name)
+        for case_id, rows in by_case.items():
+            rows.sort(key=lambda r: r.repeat)
+            for scorer in group_scorers:
+                try:
+                    per_output = await scorer.score_group(cases[case_id], [r.output for r in rows], ctx)
+                except Exception as exc:
+                    per_output = [
+                        [
+                            scorer.make(
+                                scorer.metrics[0],
+                                None,
+                                None,
+                                f"scorer error: {type(exc).__name__}: {exc}",
+                                error=True,
+                            )
+                        ]
+                        for _ in rows
+                    ]
+                for row, scores in zip(rows, per_output, strict=True):
+                    row.scores.extend(scores)
 
 
 async def _run_case(
@@ -225,6 +261,7 @@ async def execute_run(
         return result
 
     results = list(await asyncio.gather(*(one(*job) for job in jobs)))
+    await apply_group_scorers(results, suites, info, judge)
     scorer_versions = {s.name: s.version for suite in suites for s in suite.scorers}
     return Run(
         id=run_id,

@@ -44,3 +44,24 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+
+  python-extras:
+    # Real PyTorch NLI/classifier models plus DeepEval, Ragas and Inspect AI adapters.
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install with extras (CPU-only torch)
+        run: uv sync --frozen --extra ml --extra adapters
+      - name: Cache Hugging Face models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-models-v1
+      - name: Test ML detectors and adapters
+        run: uv run pytest packages/core/tests/test_selfcheck_ml.py packages/core/tests/test_adapters.py packages/core/tests/test_inspect_bridge.py
+      - name: Detector precision/recall (pground doctor)
+        run: uv run pground doctor --ml --target store-info-bot --suite customer-factuality,security-rag

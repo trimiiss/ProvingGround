@@ -129,7 +129,9 @@ class AnthropicProvider(Provider):
             else:
                 resp = await self.client.messages.create(**kwargs)
         except _TRANSIENT as exc:
-            raise ProviderError(f"anthropic: {exc}", transient=True) from exc
+            raise ProviderError(
+                f"anthropic: {exc}", transient=True, status_code=getattr(exc, "status_code", None)
+            ) from exc
         except anthropic.APIStatusError as exc:
             transient = exc.status_code in (408, 409, 429, 529) or exc.status_code >= 500
             raise ProviderError(f"anthropic: HTTP {exc.status_code}: {exc.message}", transient=transient,

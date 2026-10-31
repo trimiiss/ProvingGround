@@ -35,6 +35,22 @@ suites:
     description: Grounded answers with provided context; includes unanswerable controls.
     dataset: datasets/customer-factuality.jsonl
     scorers: [faithfulness, grounding, correctness, abstention]
+  customer-factuality-nli:
+    description: >-
+      Same cases as customer-factuality, graded by a local PyTorch NLI model instead of the
+      heuristic judge. Needs the [ml] extra (uv sync --extra ml).
+    dataset: datasets/customer-factuality.jsonl
+    scorers: [nli_faithfulness]
+  customer-selfcheck:
+    description: >-
+      SelfCheck consistency: a claim only some repeats make is a hallucination. Use with
+      --repeats 3 or more.
+    dataset: datasets/customer-quality.jsonl
+    scorers: [selfcheck]
+  security-injection-inputs:
+    description: Classifier check of retrieved documents for injected instructions ([ml] extra).
+    dataset: datasets/security-rag.jsonl
+    scorers: [injection_exposure]
   hr-quality:
     description: Internal HR policy Q&A.
     dataset: datasets/hr-quality.jsonl

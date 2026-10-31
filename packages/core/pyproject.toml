@@ -20,6 +20,12 @@ dependencies = [
     "anthropic>=1,<2",
 ]
 
+[project.optional-dependencies]
+# Local judges: NLI claim entailment, injection/toxicity classifiers, embeddings (CPU torch).
+ml = ["torch>=2.4", "transformers>=4.45", "sentencepiece>=0.2", "protobuf>=5"]
+# Third-party evaluation frameworks wrapped as optional scorers/runners.
+adapters = ["deepeval>=3.0", "ragas>=0.4", "inspect-ai>=0.3.100"]
+
 [project.scripts]
 pground = "provingground.cli:main"
 

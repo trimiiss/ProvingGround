@@ -116,7 +116,7 @@ async def check_judge(judge: Judge, report: DoctorReport) -> None:
 
 
 async def measure_detectors(
-    cfg: ProjectConfig, target_name: str, suite_names: list[str], report: DoctorReport
+    cfg: ProjectConfig, target_name: str, suite_names: list[str], report: DoctorReport, *, repeats: int = 1
 ) -> None:
     """Precision/recall of hallucination and attack detectors vs. the simulator's ground truth.
 
@@ -127,12 +127,14 @@ async def measure_detectors(
 
     run = await run_target(
         cfg, target_name, suites=suite_names,
-        settings=RunSettings(sample=60, use_cache=False, n_boot=0, cache_dir=cfg.root / ".provingground" / "cache"),
+        settings=RunSettings(sample=60, repeats=repeats, use_cache=False, n_boot=0, cache_dir=cfg.root / ".provingground" / "cache"),
     )  # fmt: skip
     if not any(r.output.raw.get("sim") for r in run.results):
         return  # not a simulated target: no ground-truth faults to measure against
     pairs = {
         "factuality.hallucination_rate": ("hallucination", "fabrication"),
+        "factuality.nli_hallucination_rate": ("hallucination", "fabrication"),
+        "factuality.selfcheck_hallucination_rate": ("hallucination", "fabrication", "wrong_selection"),
         "safety.attack_success_rate": ("attack_complied",),
     }
     for metric, fault_names in pairs.items():
@@ -156,8 +158,43 @@ async def measure_detectors(
                                     "tp": tp, "fp": fp, "fn": fn, "tn": tn}  # fmt: skip
 
 
+async def check_injection_classifier(cfg: ProjectConfig, report: DoctorReport) -> None:
+    """Precision/recall of the injection classifier on poisoned vs. clean documents."""
+    from .datasets import load_jsonl
+    from .scorers.ml.classifiers import INJECTION_HINTS, Detector
+    from .scorers.ml.models import DEFAULT_INJECTION
+
+    attack_path = cfg.resolve_path("datasets/security-rag.jsonl")
+    clean_path = cfg.resolve_path("datasets/customer-factuality.jsonl")
+    if not (attack_path.exists() and clean_path.exists()):
+        return
+    attacks, _ = load_jsonl(attack_path)
+    cleans, _ = load_jsonl(clean_path)
+    poisoned = [
+        d
+        for c in attacks
+        if "indirect_injection" in c.tags
+        for d in (c.context or [])
+        if c.metadata.get("markers") and any(m in d for m in c.metadata["markers"])
+    ]
+    clean = sorted({d for c in cleans for d in (c.context or [])})
+    if not poisoned or not clean:
+        return
+    detector = Detector(DEFAULT_INJECTION, INJECTION_HINTS)
+    pos = await asyncio.to_thread(detector.scores, poisoned)
+    neg = await asyncio.to_thread(detector.scores, clean)
+    tp = sum(p >= 0.5 for p in pos)
+    fp = sum(p >= 0.5 for p in neg)
+    fn = len(pos) - tp
+    tn = len(neg) - fp
+    report.detectors["safety.injection_exposure_rate"] = {
+        "precision": round(tp / (tp + fp), 3) if tp + fp else 1.0, "recall": round(tp / len(pos), 3),
+        "tp": tp, "fp": fp, "fn": fn, "tn": tn,
+    }  # fmt: skip
+
+
 async def run_doctor(
-    cfg: ProjectConfig, *, target: str | None = None, suites: list[str] | None = None
+    cfg: ProjectConfig, *, target: str | None = None, suites: list[str] | None = None, ml: bool = False
 ) -> DoctorReport:
     report = DoctorReport()
     registry = ProviderRegistry(cfg.providers)
@@ -166,9 +203,17 @@ async def run_doctor(
     await check_judge(judge, report)
     if suite_names:
         await check_oracle_null(cfg, suite_names, judge, report)
+    if ml:
+        try:
+            await check_injection_classifier(cfg, report)
+        except Exception as exc:
+            report.add("ml classifiers", False, f"{type(exc).__name__}: {exc}")
     if target:
         try:
             await measure_detectors(cfg, target, suite_names, report)
+            if ml:
+                await measure_detectors(cfg, target, ["customer-factuality-nli"], report)
+                await measure_detectors(cfg, target, ["customer-selfcheck"], report, repeats=3)
         except Exception as exc:
             report.add("detectors", True, f"skipped: {exc}")
     return report

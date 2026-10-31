@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from . import deterministic, judge  # noqa: F401  (registration side effects)
+from . import adapters, deterministic, judge, ml, selfcheck  # noqa: F401  (registration side effects)
 from .base import REGISTRY, ScoreContext, Scorer, build_scorer, check_metric_collisions, register
-from .judge import Judge, JudgeError, JudgeVerdict, LLMJudge, SimJudge, build_judge
+from .judge import Judge, JudgeCompletion, JudgeError, JudgeVerdict, LLMJudge, SimJudge, build_judge
 
 __all__ = [
     "REGISTRY",
     "Judge",
+    "JudgeCompletion",
     "JudgeError",
     "JudgeVerdict",
     "LLMJudge",

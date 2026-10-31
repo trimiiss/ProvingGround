@@ -367,13 +367,16 @@ def doctor(
         str | None, typer.Option("--target", "-t", help="Also measure detectors against this sim target")
     ] = None,
     suite: Annotated[str | None, typer.Option("--suite", "-s")] = None,
+    ml: Annotated[
+        bool, typer.Option("--ml", help="Also check the local PyTorch detectors (needs the [ml] extra)")
+    ] = False,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Validate graders (oracle/null/judge) and measure detector precision/recall."""
     from .doctor import run_doctor
 
     cfg = _load(config)
-    report_obj = asyncio.run(run_doctor(cfg, target=target, suites=_suite_list(suite)))
+    report_obj = asyncio.run(run_doctor(cfg, target=target, suites=_suite_list(suite), ml=ml))
     table = Table("check", "result", "detail")
     for c in report_obj.checks:
         table.add_row(c.name, "[green]PASS[/green]" if c.passed else "[red]FAIL[/red]", c.detail)
@@ -386,6 +389,74 @@ def doctor(
     else:
         err.print("[bold red]✗ some grader checks failed[/bold red]")
         raise typer.Exit(1)
+
+
+@app.command()
+def redteam(
+    target: Annotated[str, typer.Option("--target", "-t")],
+    models: Annotated[
+        str | None, typer.Option("--models", "-m", help="Comma-separated model refs to compare")
+    ] = None,
+    suite: Annotated[
+        str | None, typer.Option("--suite", "-s", help="Default: the target's security-* suites")
+    ] = None,
+    sample: Annotated[int | None, typer.Option()] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    output: Annotated[
+        Path | None, typer.Option("--output", "-o", help="Directory for redteam.md / redteam.html")
+    ] = None,
+) -> None:
+    """Attack a target and report attack success rate by goal, technique and encoding."""
+    from .redteam.report import render_redteam_html, render_redteam_markdown, summarize_attacks
+
+    cfg = _load(config)
+    target_cfg = cfg.target(target)
+    suites = _suite_list(suite) or [
+        s for s in target_cfg.suites if s.startswith("security-") or s == "over-refusal"
+    ]
+    if not suites:
+        err.print(f"[red]{target} has no security-* suites; pass --suite[/red]")
+        raise typer.Exit(2)
+    settings = settings_from_config(cfg, sample=sample)
+    store = RunStore(cfg.root)
+    summaries = []
+    for model in [m.strip() for m in models.split(",")] if models else [None]:
+        overrides: dict[str, object] = {"model": model} if model else {}
+        run_obj = _run_with_progress(cfg, target, suites, settings, overrides, {"kind": "redteam"})
+        store.save(run_obj, render_run_reports(run_obj, requests_per_month=cfg.traffic.requests_per_month))
+        summaries.append(summarize_attacks(run_obj))
+    md = render_redteam_markdown(summaries)
+    directory = output or store.dir_for(summaries[-1].run_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "redteam.md").write_text(md, encoding="utf-8")
+    (directory / "redteam.html").write_text(render_redteam_html(summaries), encoding="utf-8")
+    console.print(md, markup=False, highlight=False)
+    console.print(f"[green]wrote {directory / 'redteam.html'}[/green]")
+
+
+@app.command("inspect")
+def inspect_cmd(
+    target: Annotated[str, typer.Option("--target", "-t")],
+    task: Annotated[
+        str, typer.Option("--task", help="Inspect task: path/to/file.py[@name] or a registry name")
+    ],
+    limit: Annotated[int | None, typer.Option(help="Evaluate at most N samples")] = None,
+    set_: Annotated[list[str] | None, typer.Option("--set")] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Run an Inspect AI task (or an inspect_evals benchmark) against a target and store it as a run."""
+    from .inspect_bridge import run_inspect_task
+
+    cfg = _load(config)
+    run_obj = asyncio.run(run_inspect_task(cfg, target, task, limit=limit, overrides=_parse_overrides(set_)))
+    store = RunStore(cfg.root)
+    directory = store.save(
+        run_obj, render_run_reports(run_obj, requests_per_month=cfg.traffic.requests_per_month)
+    )
+    s = run_obj.summary
+    console.print(f"[bold green]✓[/bold green] {run_obj.id}  pass_rate="
+                  f"{'n/a' if s.pass_rate is None else f'{s.pass_rate * 100:.1f}%'}  samples={s.n_results}")  # fmt: skip
+    console.print(f"  reports: {directory / 'report.md'}")
 
 
 @app.command("gate-changed")

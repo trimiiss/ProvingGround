@@ -46,8 +46,23 @@ class JudgeVerdict(BaseModel):
     cost_usd: float | None = None
 
 
+class JudgeCompletion(BaseModel):
+    """A raw judge-model completion, used by third-party framework adapters (DeepEval, Ragas)."""
+
+    text: str
+    model: str
+    usage: Usage = Field(default_factory=Usage)
+    cost_usd: float | None = None
+
+
 class Judge(ABC):
     model: str
+
+    async def complete(self, system: str, user: str, schema: dict[str, Any] | None = None) -> JudgeCompletion:
+        raise NotImplementedError(
+            f"{self.model} cannot produce free-form completions; "
+            "configure a real judge model (e.g. anthropic/claude-opus-5-5)"
+        )
 
     @abstractmethod
     async def correctness(
@@ -314,6 +329,37 @@ class LLMJudge(Judge):
                     self.cache.put(key, {"parsed": parsed.model_dump(), "meta": meta.model_dump(mode="json")})
                 return parsed, meta
         raise JudgeError(last_error or "judge failed")
+
+    async def complete(self, system: str, user: str, schema: dict[str, Any] | None = None) -> JudgeCompletion:
+        key = hashlib.sha256(
+            json.dumps(
+                [self.model, PROMPT_VERSION, "complete", system, user, schema], sort_keys=True
+            ).encode()
+        ).hexdigest()
+        if self.cache and (hit := self.cache.get(key)):
+            return JudgeCompletion.model_validate(hit)
+        provider, model = self.registry.for_model(self.model, judge=self.config.fallbacks)
+        request = ChatRequest(
+            model=model,
+            system=system or None,
+            messages=[Message(role="user", content=user)],
+            response_schema=schema,
+            effort=self.config.effort,
+            max_tokens=self.config.max_tokens,
+            metadata={"task": "judge"},
+        )
+        async with self._sem:
+            try:
+                resp = await provider.chat(request)
+            except ProviderError as exc:
+                raise JudgeError(str(exc)) from exc
+        served = f"{self.model.split('/', 1)[0]}/{resp.model_served}"
+        out = JudgeCompletion(
+            text=resp.text, model=served, usage=resp.usage, cost_usd=cost_usd(served, resp.usage)
+        )
+        if self.cache:
+            self.cache.put(key, out.model_dump(mode="json"))
+        return out
 
     async def correctness(
         self, question: str, answer: str, reference: str, *, unanswerable: bool = False

@@ -9,6 +9,11 @@ dependencies = [
     "provingground-demo-agents",
 ]
 
+[project.optional-dependencies]
+ml = ["provingground[ml]"]
+adapters = ["provingground[adapters]"]
+all = ["provingground[ml,adapters]"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.3",
@@ -26,7 +31,13 @@ package = false
 [tool.uv.workspace]
 members = ["packages/core", "services/api", "services/demo_agents"]
 
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 provingground = { workspace = true }
 provingground-api = { workspace = true }
 provingground-demo-agents = { workspace = true }

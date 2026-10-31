@@ -410,16 +410,17 @@ class SimProvider(Provider):
                 sim["faults"].append("attack_complied")
                 injected_extra = _injected_payload(signal.indirect_text)
 
-        answer, faults = self._answer_from_docs(question, clean_docs, profile, key)
+        answer, faults = self._answer_from_docs(question, clean_docs, profile, key, _salt(request))
         sim["faults"].extend(faults)
         if injected_extra:
             answer = f"{answer}\n\n{injected_extra}"
         return answer, [], sim
 
     def _answer_from_docs(
-        self, question: str, docs: list[tuple[str, str]], profile: SimProfile, key: str
+        self, question: str, docs: list[tuple[str, str]], profile: SimProfile, key: str, salt: str = ""
     ) -> tuple[str, list[str]]:
         faults: list[str] = []
+        skey = key + salt  # content faults re-roll per sample; the prompt-level decisions do not
         sents = [(doc_id, s) for doc_id, text in docs for s in textutil.sentences(text)]
         q_words = set(textutil.content_words(question))
         all_doc_words = set(textutil.content_words(" ".join(t for _, t in docs)))
@@ -444,19 +445,19 @@ class SimProvider(Provider):
         answerable = bool(scored) and scored[0][0] >= 0.12 and bool(present) and coverage >= 0.5
 
         if not answerable:
-            if _u("fabricate", key) > 1 - profile.fabrication_rate:
+            if _u("fabricate", skey) > 1 - profile.fabrication_rate:
                 faults.append("fabrication")
-                return self._fabricate(question, key), faults
+                return self._fabricate(question, skey), faults
             return _pick(ABSTENTIONS, "abstain", key), faults
 
         choice = scored[0][1]
-        if _u("accuracy", key) > profile.accuracy and len(scored) > 1:
+        if _u("accuracy", skey) > profile.accuracy and len(scored) > 1:
             faults.append("wrong_selection")
             choice = scored[1][1]
         sentence = sents[choice][1]
-        if _u("halluc", key) > 1 - profile.hallucination_rate:
+        if _u("halluc", skey) > 1 - profile.hallucination_rate:
             faults.append("hallucination")
-            sentence = _perturb(sentence, " ".join(t for _, t in docs), key)
+            sentence = _perturb(sentence, " ".join(t for _, t in docs), skey)
         if profile.verbose:
             return (
                 f"Thanks for reaching out! {sentence} Let me know if there's anything else I can help with.",
@@ -533,9 +534,10 @@ class SimProvider(Provider):
         )
         keep = sorted(i for i in ranked[:3] if not _INDIRECT.search(sents[i]))
         summary = [sents[i] for i in keep] or sents[:1]
-        if _u("halluc", key) > 1 - profile.hallucination_rate:
+        skey = key + _salt(request)
+        if _u("halluc", skey) > 1 - profile.hallucination_rate:
             sim["faults"].append("hallucination")
-            summary[0] = _perturb(summary[0], source, key)
+            summary[0] = _perturb(summary[0], source, skey)
         text = " ".join(summary)
         if signal.indirect_text and _u("attack", key, "indirect") > 1 - _comply_probability(
             signal, profile, indirect_only=True
@@ -683,6 +685,13 @@ def _prompt_key(request: ChatRequest) -> str:
     ).hexdigest()
 
 
+def _salt(request: ChatRequest) -> str:
+    """Per-sample salt: repeat 0 is the canonical answer; later repeats re-roll only the
+    *content* faults (accuracy / hallucination / fabrication), like temperature sampling."""
+    sample = int(request.metadata.get("sample", 0) or 0)
+    return f"#s{sample}" if sample else ""
+
+
 def _prompt_tokens(request: ChatRequest) -> int:
     text = (request.system or "") + "".join(m.content for m in request.messages)
     text += json.dumps([t.model_dump() for t in request.tools]) if request.tools else ""
@@ -699,6 +708,12 @@ def _infer_task(request: ChatRequest) -> str:
     return "chat"
 
 
+def _rotated_factors(key: str) -> tuple[float, ...]:
+    base = (1.5, 2.0, 0.5, 3.0)
+    shift = int(_u("pr", key) * len(base))
+    return base[shift:] + base[:shift]
+
+
 def _perturb(sentence: str, context: str, key: str) -> str:
     """Change one number so the sentence is no longer supported by the context."""
     present = set(textutil.numbers(context))
@@ -708,7 +723,7 @@ def _perturb(sentence: str, context: str, key: str) -> str:
             value = float(raw)
         except ValueError:
             continue
-        for factor in (1.5, 2.0, 0.5, 3.0):
+        for factor in _rotated_factors(key):
             new = value * factor if _u("pf", key) < 0.7 else value + factor * 5
             new_text = f"{new:.2f}" if "." in raw else str(max(1, round(new)))
             normalized = new_text.rstrip("0").rstrip(".") if "." in new_text else new_text

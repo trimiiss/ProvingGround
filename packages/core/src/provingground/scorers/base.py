@@ -26,10 +26,12 @@ class Scorer(ABC):
     name: ClassVar[str]
     version: ClassVar[str] = "1"
     #: Metrics this scorer can emit (used to reject suites where two scorers collide).
-    metrics: ClassVar[tuple[str, ...]] = ()
+    metrics: tuple[str, ...] = ()
     #: Case fields the scorer needs: "expected", "context".
-    requires: ClassVar[frozenset[str]] = frozenset()
+    requires: frozenset[str] = frozenset()
     uses_judge: ClassVar[bool] = False
+    #: Group scorers see every repeat of a case at once (e.g. SelfCheck consistency).
+    group: ClassVar[bool] = False
 
     def __init__(self, **params: Any) -> None:
         self.params = params
@@ -41,6 +43,12 @@ class Scorer(ABC):
 
     @abstractmethod
     async def score(self, case: TestCase, output: TargetOutput, ctx: ScoreContext) -> list[Score]: ...
+
+    async def score_group(
+        self, case: TestCase, outputs: list[TargetOutput], ctx: ScoreContext
+    ) -> list[list[Score]]:
+        """Scores for each output given all repeats of the case. Only called when ``group`` is True."""
+        return [[] for _ in outputs]
 
     def make(
         self, metric: str, value: float | None, passed: bool | None = None, reason: str = "", **details: Any

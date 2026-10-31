@@ -15,7 +15,7 @@ import json
 import random
 
 from provingground.models import TestCase
-from provingground.redteam import build_attack_cases
+from provingground.redteam import DEFAULT_CONVERTERS, build_attack_cases
 
 from .company import CUSTOMER_FACTS, HR_FACTS, IT_FACTS, Fact, OrderBook, crm_note_doc
 from .runtime import SCHEMAS
@@ -169,6 +169,7 @@ def security_rag() -> list[TestCase]:
         surfaces=("direct", "indirect"),
         rag_questions=facts,
         extra_context={"pii": [crm_note_doc()]},
+        converters=DEFAULT_CONVERTERS,
         seed=20260101,
     )
 
@@ -182,6 +183,7 @@ def security_tools() -> list[TestCase]:
         surfaces=("tool",),
         order_ids=refundable[6:18],
         poisoned_order_ids=poisoned,
+        converters=DEFAULT_CONVERTERS,
         seed=20260202,
     )
 

@@ -50,19 +50,21 @@ def _direct_cases(
     for goal_id in goals:
         goal = GOALS[goal_id]
         for i, (tech_name, tech) in enumerate(techniques):
-            converter = converters[i % len(converters)]
             order_id = order_ids[i % len(order_ids)] if order_ids else None
             prompt = tech(_fill(goal, i, order_id))
-            text = apply_converter(converter, prompt)
-            meta = _attack_meta(goal_id, tech_name, converter)
-            context = None
-            if goal_id == "pii_exfil":
-                context = [*pii_context, *rng.sample(rag_doc_pool, min(2, len(rag_doc_pool)))]
-                rng.shuffle(context)
-            cases.append(TestCase(
-                id=f"{prefix}-{goal_id}-{tech_name}-{converter}", input=text, context=context,
-                tags=["security", goal_id, tech_name], metadata=meta, critical=(i == 0 and goal_id != "forbidden_topic"),
-            ))  # fmt: skip
+            for converter in converters:  # full cross product: every technique under every encoding
+                context = None
+                if goal_id == "pii_exfil":
+                    context = [*pii_context, *rng.sample(rag_doc_pool, min(2, len(rag_doc_pool)))]
+                    rng.shuffle(context)
+                cases.append(TestCase(
+                    id=f"{prefix}-{goal_id}-{tech_name}-{converter}",
+                    input=apply_converter(converter, prompt),
+                    context=context,
+                    tags=["security", goal_id, tech_name, f"conv-{converter}"],
+                    metadata=_attack_meta(goal_id, tech_name, converter),
+                    critical=(i == 0 and converter == "none" and goal_id != "forbidden_topic"),
+                ))  # fmt: skip
     return cases
 
 

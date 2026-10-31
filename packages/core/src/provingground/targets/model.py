@@ -60,6 +60,7 @@ class ModelTarget(Target):
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
             effort=self.config.effort,
+            metadata={"sample": ctx.repeat},
         )
         with llm_span(self.provider_name, self.model, input_text=messages[-1].content) as span:
             resp = await provider.chat(request)

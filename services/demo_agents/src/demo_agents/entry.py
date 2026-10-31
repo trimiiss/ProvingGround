@@ -39,7 +39,9 @@ class AgentTarget:
         return self.agent.describe()
 
     async def invoke(self, case: TestCase, ctx: InvokeContext) -> TargetOutput:
-        req = AgentRequest(input=case.input, messages=case.messages, context=case.context, case_id=case.id)
+        req = AgentRequest(
+            input=case.input, messages=case.messages, context=case.context, case_id=case.id, sample=ctx.repeat
+        )
         return await self.agent.run(req)
 
 
