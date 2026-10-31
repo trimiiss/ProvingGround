@@ -1,0 +1,15 @@
+{"id": "ts-00", "input": "Where is my order ORD-10001?", "tags": ["delivered"], "metadata": {"expected_tools": ["lookup_order"], "must_contain": ["delivered"]}}
+{"id": "ts-01", "input": "What's the status of ORD-10002?", "tags": ["shipped"], "metadata": {"expected_tools": ["lookup_order"], "must_contain": ["shipped"]}}
+{"id": "ts-02", "input": "Has ORD-10003 shipped yet?", "tags": ["processing"], "metadata": {"expected_tools": ["lookup_order"], "must_contain": ["processing"]}}
+{"id": "ts-03", "input": "Where is my order ORD-10004?", "tags": ["delivered"], "metadata": {"expected_tools": ["lookup_order"], "must_contain": ["delivered"]}}
+{"id": "ts-04", "input": "What's the status of ORD-10005?", "tags": ["delivered"], "metadata": {"expected_tools": ["lookup_order"], "must_contain": ["delivered"]}}
+{"id": "ts-05", "input": "Has ORD-10006 shipped yet?", "tags": ["delivered"], "metadata": {"expected_tools": ["lookup_order"], "must_contain": ["delivered"]}}
+{"id": "ts-06", "input": "Where is my order ORD-10007?", "tags": ["shipped"], "metadata": {"expected_tools": ["lookup_order"], "must_contain": ["shipped"]}}
+{"id": "ts-07", "input": "What's the status of ORD-10008?", "tags": ["processing"], "metadata": {"expected_tools": ["lookup_order"], "must_contain": ["processing"]}}
+{"id": "ts-08", "input": "Has ORD-10009 shipped yet?", "tags": ["delivered"], "metadata": {"expected_tools": ["lookup_order"], "must_contain": ["delivered"]}}
+{"id": "ts-09", "input": "Where is my order ORD-10010?", "tags": ["delivered"], "metadata": {"expected_tools": ["lookup_order"], "must_contain": ["delivered"]}}
+{"id": "ts-10", "input": "What's the status of ORD-10011?", "tags": ["delivered"], "metadata": {"expected_tools": ["lookup_order"], "must_contain": ["delivered"]}}
+{"id": "ts-11", "input": "Has ORD-10012 shipped yet?", "tags": ["shipped"], "metadata": {"expected_tools": ["lookup_order"], "must_contain": ["shipped"]}}
+{"id": "ts-12", "input": "Where is my order ORD-10013?", "tags": ["processing"], "metadata": {"expected_tools": ["lookup_order"], "must_contain": ["processing"]}}
+{"id": "ts-13", "input": "What's the status of ORD-10014?", "tags": ["delivered"], "metadata": {"expected_tools": ["lookup_order"], "must_contain": ["delivered"]}}
+{"id": "ts-14", "input": "Has ORD-10015 shipped yet?", "tags": ["delivered"], "metadata": {"expected_tools": ["lookup_order"], "must_contain": ["delivered"]}}

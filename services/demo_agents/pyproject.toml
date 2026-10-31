@@ -3,7 +3,7 @@ name = "provingground-demo-agents"
 version = "0.1.0"
 description = "Demo company agents (the systems under test) for ProvingGround"
 requires-python = ">=3.12"
-dependencies = ["provingground"]
+dependencies = ["provingground", "pyyaml>=6.0"]
 
 [build-system]
 requires = ["hatchling"]

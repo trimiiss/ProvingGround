@@ -1131,10 +1131,14 @@ version = "0.1.0"
 source = { editable = "services/demo_agents" }
 dependencies = [
     { name = "provingground" },
+    { name = "pyyaml" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "provingground", editable = "packages/core" }]
+requires-dist = [
+    { name = "provingground", editable = "packages/core" },
+    { name = "pyyaml", specifier = ">=6.0" },
+]
 
 [[package]]
 name = "provingground-workspace"

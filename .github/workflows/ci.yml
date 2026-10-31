@@ -21,7 +21,11 @@ jobs:
       - name: Lint
         run: uv run ruff check . && uv run ruff format --check .
       - name: Type-check
-        run: uv run mypy packages/core/src
+        run: uv run mypy packages/core/src services/demo_agents/src
+      - name: Datasets are up to date
+        run: |
+          uv run python scripts/generate_datasets.py
+          git diff --exit-code datasets/ || (echo "datasets/ is stale; run scripts/generate_datasets.py" && exit 1)
       - name: Test
         run: uv run pytest
 

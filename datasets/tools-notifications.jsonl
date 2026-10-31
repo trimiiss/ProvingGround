@@ -1,0 +1,14 @@
+{"id": "tn-00", "input": "Can you email me a summary of order ORD-10016?", "tags": ["email"], "metadata": {"expected_tools": ["lookup_order", "send_email"], "must_contain": ["ben.hart@example.com"]}}
+{"id": "tn-01", "input": "Please send the details of ORD-10017 to my email.", "tags": ["email"], "metadata": {"expected_tools": ["lookup_order", "send_email"], "must_contain": ["chloe.khan@example.com"]}}
+{"id": "tn-02", "input": "Could you forward the receipt for ORD-10018 to my email address?", "tags": ["email"], "metadata": {"expected_tools": ["lookup_order", "send_email"], "must_contain": ["diego.novak@example.com"]}}
+{"id": "tn-03", "input": "Can you email me a summary of order ORD-10019?", "tags": ["email"], "metadata": {"expected_tools": ["lookup_order", "send_email"], "must_contain": ["emma.diaz@example.com"]}}
+{"id": "tn-04", "input": "Please send the details of ORD-10020 to my email.", "tags": ["email"], "metadata": {"expected_tools": ["lookup_order", "send_email"], "must_contain": ["farah.green@example.com"]}}
+{"id": "tn-05", "input": "Could you forward the receipt for ORD-10021 to my email address?", "tags": ["email"], "metadata": {"expected_tools": ["lookup_order", "send_email"], "must_contain": ["gus.jones@example.com"]}}
+{"id": "tn-06", "input": "Can you email me a summary of order ORD-10022?", "tags": ["email"], "metadata": {"expected_tools": ["lookup_order", "send_email"], "must_contain": ["hana.moss@example.com"]}}
+{"id": "tn-07", "input": "Please send the details of ORD-10023 to my email.", "tags": ["email"], "metadata": {"expected_tools": ["lookup_order", "send_email"], "must_contain": ["ivan.chen@example.com"]}}
+{"id": "tn-08", "input": "Could you forward the receipt for ORD-10024 to my email address?", "tags": ["email"], "metadata": {"expected_tools": ["lookup_order", "send_email"], "must_contain": ["jade.fox@example.com"]}}
+{"id": "tn-09", "input": "Can you email me a summary of order ORD-10025?", "tags": ["email"], "metadata": {"expected_tools": ["lookup_order", "send_email"], "must_contain": ["kofi.ito@example.com"]}}
+{"id": "tn-10", "input": "Please send the details of ORD-10026 to my email.", "tags": ["email"], "metadata": {"expected_tools": ["lookup_order", "send_email"], "must_contain": ["lia.lopez@example.com"]}}
+{"id": "tn-11", "input": "Could you forward the receipt for ORD-10027 to my email address?", "tags": ["email"], "metadata": {"expected_tools": ["lookup_order", "send_email"], "must_contain": ["milo.brooks@example.com"]}}
+{"id": "tn-12", "input": "Can you email me a summary of order ORD-10028?", "tags": ["email"], "metadata": {"expected_tools": ["lookup_order", "send_email"], "must_contain": ["nina.evans@example.com"]}}
+{"id": "tn-13", "input": "Please send the details of ORD-10029 to my email.", "tags": ["email"], "metadata": {"expected_tools": ["lookup_order", "send_email"], "must_contain": ["ava.hart@example.com"]}}
