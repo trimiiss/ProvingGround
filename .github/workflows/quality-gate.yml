@@ -2,16 +2,13 @@ name: quality-gate
 
 # Blocks a pull request that makes an AI agent worse. Make the `quality-gate` job a *required*
 # status check in branch protection to enforce it (Settings > Branches > main).
+#
+# It runs on every pull request (no `paths:` filter): a required check that never reports would
+# leave unrelated PRs waiting forever. The gate itself is diff-aware, so a PR that changes no
+# agent finishes in about a minute with nothing to evaluate.
 
 on:
   pull_request:
-    paths:
-      - "services/demo_agents/**"
-      - "datasets/**"
-      - "provingground.yaml"
-      - "packages/core/**"
-      - ".github/workflows/quality-gate.yml"
-      - ".github/actions/provingground-gate/**"
 
 permissions:
   contents: read
