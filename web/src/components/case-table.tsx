@@ -216,7 +216,7 @@ function Pre({ children, label }: { children: React.ReactNode; label?: string })
   return (
     <div className="rounded-lg bg-muted/60 p-3">
       {label && <p className="mb-1 text-[11px] font-medium text-muted-foreground uppercase">{label}</p>}
-      <pre className="font-sans text-sm leading-relaxed break-words whitespace-pre-wrap">{children}</pre>
+      <pre className="font-sans text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">{children}</pre>
     </div>
   );
 }

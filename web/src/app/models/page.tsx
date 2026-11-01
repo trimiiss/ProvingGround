@@ -23,6 +23,8 @@ async function Models() {
   const points: ParetoPoint[] = models
     .filter((m) => m.metrics["quality.correctness"] !== undefined && m.cost_per_1k_usd)
     .map((m) => ({ model: m.model, quality: m.metrics["quality.correctness"], cost: m.cost_per_1k_usd!, latency: m.metrics["perf.latency_p95_ms"] ?? null, pareto: m.on_pareto_front }));
+  // With every model on the front the badge would say nothing, so it only marks a real trade-off.
+  const dominated = models.some((m) => !m.on_pareto_front);
   const cell = (name: string, v: number | undefined) => <TableCell className={`tabular text-right ${toneClass[toneFor(name, v)]}`}>{v === undefined ? "—" : pct(v, 1)}</TableCell>;
 
   return (
@@ -60,7 +62,7 @@ async function Models() {
                     <TableRow key={m.model}>
                       <TableCell>
                         <span className="font-medium">{m.model}</span>
-                        {m.on_pareto_front && <Chip tone="info" dot={false} className="ml-2">best trade-off</Chip>}
+                        {dominated && m.on_pareto_front && <Chip tone="info" dot={false} className="ml-2">best trade-off</Chip>}
                         <p className="max-w-64 truncate text-xs text-muted-foreground" title={m.agents.join(", ")}>
                           {m.agents.join(", ")}
                         </p>

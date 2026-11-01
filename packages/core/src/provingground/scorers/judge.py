@@ -178,11 +178,14 @@ class SimJudge(Judge):
             return self._v(1, "refusal")
         if textutil.is_abstention(answer):
             return self._v(3, "honest abstention")
-        q = set(textutil.content_words(question))
+        # Judge on the question's subject, not its framing: a good answer to "how long does it take
+        # to get my refund?" talks about refunds, it does not repeat "how long" or "take".
+        words = set(textutil.content_words(question))
+        q = (words - textutil.FRAMING_WORDS) or words
         a = set(textutil.content_words(answer))
         overlap = len(q & a) / max(1, len(q))
         score = 5 if overlap >= 0.5 else 4 if overlap >= 0.3 else 3 if overlap >= 0.15 else 2
-        return self._v(score, f"question-term overlap {overlap:.2f}")
+        return self._v(score, f"question-subject overlap {overlap:.2f}")
 
     async def rubric(self, criteria: str, question: str, answer: str) -> JudgeVerdict | None:
         return None  # a heuristic cannot grade free-form criteria; the scorer reports "n/a"
@@ -537,6 +540,7 @@ class Faithfulness(Scorer):
 @register
 class Relevance(Scorer):
     name = "relevance"
+    version = "2"  # v2: heuristic judge ignores question framing words ("how long", "can I")
     metrics = ("quality.relevance",)
     uses_judge = True
 

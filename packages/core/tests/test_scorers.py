@@ -99,6 +99,16 @@ async def test_false_refusal(score_ctx: ScoreContext) -> None:
     assert s.passed is False
 
 
+async def test_sim_relevance_judges_the_subject_not_the_framing(score_ctx: ScoreContext) -> None:
+    case = TestCase(id="c", input="How long does it take to get my refund? Thanks!")
+    (s,) = await score_one(
+        "relevance", case, out("Refunds reach the original card within 5 business days."), score_ctx
+    )
+    assert s.passed
+    (s,) = await score_one("relevance", case, out("Our stores open at 9am on weekdays."), score_ctx)
+    assert not s.passed
+
+
 def test_metric_collision_detected() -> None:
     from provingground.scorers import check_metric_collisions
 

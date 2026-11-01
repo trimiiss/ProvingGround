@@ -133,8 +133,15 @@ def _eval_noninferiority(rule: GateRule, delta: MetricDelta | None) -> tuple[Ver
     else:
         bound = -margin
         verdict = Verdict.PASS if lo >= bound else Verdict.FAIL if hi < bound else Verdict.INCONCLUSIVE
-    arrow = format_metric(rule.metric, delta.delta)
-    return verdict, f"Δ {arrow} vs margin ±{format_metric(rule.metric, margin)}"
+    fmt = lambda v: format_metric(rule.metric or "", v)  # noqa: E731
+    ci = f" (95% CI {fmt(lo)}…{fmt(hi)})" if delta.ci_low is not None and delta.ci_high is not None else ""
+    limit = f"{'+' if lower_better else '-'}{fmt(margin)}"
+    change = f"Δ {fmt(delta.delta)}{ci}"
+    if verdict == Verdict.PASS:
+        return verdict, f"{change} is within the {limit} margin"
+    if verdict == Verdict.FAIL:
+        return verdict, f"{change} is beyond the {limit} margin"
+    return verdict, f"{change} straddles the {limit} margin: a regression beyond it cannot be ruled out"
 
 
 def _eval_critical(candidate: Run, comparison: Comparison | None) -> tuple[Verdict, str, int]:
@@ -196,6 +203,10 @@ def evaluate_gate(
             verdicts.append(v)
             details.append(d)
         verdict = _apply_inconclusive(_worst(verdicts), policy)
+        if _worst(verdicts) == Verdict.INCONCLUSIVE and verdict != Verdict.INCONCLUSIVE:
+            details.append(
+                f"inconclusive, counted as {verdict.value} (on_inconclusive: {policy.on_inconclusive})"
+            )
         rule_results.append(RuleResult(
             rule=rule.label, metric=rule.metric, verdict=verdict, severity=rule.severity,
             baseline=delta.baseline if delta else None, candidate=delta.candidate if delta else None,

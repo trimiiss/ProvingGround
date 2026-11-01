@@ -98,7 +98,7 @@ async function AgentDetail({ params }: { params: PageProps<"/agents/[slug]">["pa
 
       {a.latest_run ? (
         <Section title="Latest evaluation" description={`${a.latest_run.n_results} cases · ${relTime(a.latest_run.created_at)}`}>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
             {HEADLINE.filter((m) => metrics[m] !== undefined).map((m) => {
               const info = metricInfo(m);
               return <MetricTile key={m} label={info.label} value={info.format(metrics[m])} tone={toneFor(m, metrics[m])} />;

@@ -2,12 +2,12 @@ import path from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 
 /**
- * Smoke test of the dashboard against the seeded demo stack. It also captures the README screenshots
- * (set SCREENSHOTS=0 to skip them).
+ * Smoke test of the dashboard against the seeded demo stack. With SCREENSHOTS=1 it also refreshes the
+ * README screenshots in docs/screenshots.
  */
 
 const SHOTS = path.resolve(__dirname, "..", "..", "docs", "screenshots");
-const capture = process.env.SCREENSHOTS !== "0";
+const capture = process.env.SCREENSHOTS === "1";
 
 async function settle(page: Page) {
   await page.waitForLoadState("networkidle");

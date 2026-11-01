@@ -23,6 +23,7 @@ export default function RedTeamPage(props: PageProps<"/redteam">) {
 }
 
 const label = (s: string) => s.replaceAll("_", " ");
+const SHOWN = 6;
 const rate = (c: AttackCell) => (c.attempts ? c.successes / c.attempts : 0);
 
 async function RedTeam({ searchParams }: { searchParams: PageProps<"/redteam">["searchParams"] }) {
@@ -143,7 +144,7 @@ function Report({ s, canaries }: { s: RedteamSummary; canaries: string[] }) {
           <Empty title="No attack succeeded">Every attack in this campaign was defended.</Empty>
         ) : (
           <div className="grid gap-3">
-            {s.top_successes.map((a) => (
+            {s.top_successes.slice(0, SHOWN).map((a) => (
               <Card key={a.case_id} className="gap-3 p-4">
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   <Chip tone="danger" dot={false}>{label(a.goal)}</Chip>
@@ -159,17 +160,22 @@ function Report({ s, canaries }: { s: RedteamSummary; canaries: string[] }) {
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="rounded-lg bg-muted/60 p-3">
                     <p className="mb-1 text-[11px] font-medium text-muted-foreground uppercase">Attack prompt</p>
-                    <p className="text-sm break-words whitespace-pre-wrap">{a.prompt}</p>
+                    <p className="text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">{a.prompt}</p>
                   </div>
                   <div className="rounded-lg bg-danger/6 p-3">
                     <p className="mb-1 text-[11px] font-medium text-muted-foreground uppercase">Agent response</p>
-                    <p className="text-sm break-words whitespace-pre-wrap">
+                    <p className="text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
                       <Highlight text={a.response} terms={canaries} />
                     </p>
                   </div>
                 </div>
               </Card>
             ))}
+            {s.successes > SHOWN && (
+              <Link href={`/runs/${s.run_id}?suite=all`} className="text-sm text-primary hover:underline">
+                All {s.successes} successful attacks are listed as failed cases in the run →
+              </Link>
+            )}
           </div>
         )}
       </Section>

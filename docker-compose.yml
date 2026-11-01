@@ -67,6 +67,20 @@ services:
       api:
         condition: service_healthy
 
+  web:
+    build:
+      context: web
+    image: provingground-web:dev
+    environment:
+      # server side only: the admin key never reaches the browser
+      PGROUND_API_URL: http://api:8000
+      PGROUND_API_KEY: ${PGROUND_API_KEY:-dev-admin-key}
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
   prometheus:
     image: prom/prometheus:v3.5.0
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=15d"]

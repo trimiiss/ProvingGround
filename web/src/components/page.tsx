@@ -44,8 +44,8 @@ export function Section({
   return (
     <section className={cn("flex flex-col gap-3", className)}>
       {(title || actions) && (
-        <div className="flex items-end justify-between gap-3">
-          <div>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="shrink-0">
             {title && <h2 className="text-sm font-semibold tracking-tight">{title}</h2>}
             {description && <p className="text-xs text-muted-foreground">{description}</p>}
           </div>

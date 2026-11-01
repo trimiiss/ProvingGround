@@ -27,6 +27,30 @@ const FORMATS: Record<Fmt, (v: number) => string> = {
   num: (v) => v.toLocaleString("en-US", { maximumFractionDigits: 2 }),
 };
 
+/** Compact tick labels: axes have little room, tooltips carry the precise values. */
+const TICKS: Record<Fmt, (v: number) => string> = {
+  pct: (v) => pct(v, 0),
+  ms: (v) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}s` : `${Math.round(v)}ms`),
+  usd: (v) => (v === 0 ? "$0" : `$${Number(v.toPrecision(2))}`),
+  num: (v) => v.toLocaleString("en-US", { notation: "compact", maximumFractionDigits: 1 }),
+};
+
+/** Round ticks from 0 to just above `max`, in steps of 1, 2, 2.5 or 5 × 10^k. */
+function niceTicks(max: number, count = 4): number[] {
+  if (!(max > 0)) return [0, 1];
+  const raw = max / count;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw * (1 - 1e-9)) ?? 10 * mag;
+  const n = Math.ceil(max / step - 1e-9);
+  return Array.from({ length: n + 1 }, (_, i) => Number((i * step).toPrecision(12)));
+}
+
+/** Percent axes stay within 0–100% (rounded out to the nearest 5%). */
+const PCT_DOMAIN: [(min: number) => number, (max: number) => number] = [
+  (min) => Math.max(0, Math.floor(min * 20) / 20),
+  (max) => Math.min(1, Math.ceil(max * 20) / 20),
+];
+
 const AXIS = { fontSize: 11, fill: "var(--muted-foreground)" } as const;
 const GRID = { stroke: "var(--border)", strokeDasharray: "3 3", vertical: false } as const;
 
@@ -89,24 +113,34 @@ export function TrendChart({
   color?: string;
   domain?: [number | "auto", number | "auto"];
 }) {
-  const changes: { t: string; label: string }[] = [];
+  const changes: { t: string; label: string; end: boolean }[] = [];
   data.forEach((d, i) => {
     if (i > 0 && d.model && data[i - 1].model && d.model !== data[i - 1].model) {
-      changes.push({ t: d.t, label: `→ ${d.model.split("/").pop()}` });
+      // Near the right edge the label goes on the left of its line so it is not clipped.
+      changes.push({ t: d.t, label: `→ ${d.model.split("/").pop()}`, end: i > data.length * 0.75 });
     }
   });
+  // Labels sit just right of their line, on alternating rows so nearby changes stay readable.
+  const marker = (text: string, row: number, end: boolean) =>
+    function MarkerLabel({ viewBox }: { viewBox?: { x?: number; y?: number } }) {
+      return (
+        <text x={(viewBox?.x ?? 0) + (end ? -4 : 4)} y={(viewBox?.y ?? 0) + 10 + row * 12} textAnchor={end ? "end" : "start"} fontSize={10} fill="var(--chart-4)">
+          {text}
+        </text>
+      );
+    };
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={{ top: 14, right: 12, bottom: 0, left: 0 }}>
         <CartesianGrid {...GRID} />
         <XAxis dataKey="t" tickFormatter={dayLabel} tick={AXIS} tickLine={false} axisLine={false} minTickGap={36} />
-        <YAxis tickFormatter={FORMATS[format]} tick={AXIS} tickLine={false} axisLine={false} width={48} domain={domain ?? ["auto", "auto"]} />
+        <YAxis tickFormatter={TICKS[format]} tick={AXIS} tickLine={false} axisLine={false} width={48} domain={domain ?? (format === "pct" ? PCT_DOMAIN : ["auto", "auto"])} />
         <Tooltip
           cursor={{ stroke: "var(--border)" }}
           content={<Tip fmt={{ [name]: FORMATS[format] }} xFormat={dayLabel} extra={(r) => (r.model ? `model ${String(r.model).split("/").pop()}` : null)} />}
         />
-        {changes.map((c) => (
-          <ReferenceLine key={c.t} x={c.t} stroke="var(--chart-4)" strokeDasharray="4 3" label={{ value: c.label, position: "top", fontSize: 10, fill: "var(--chart-4)" }} />
+        {changes.map((c, i) => (
+          <ReferenceLine key={c.t} x={c.t} stroke="var(--chart-4)" strokeDasharray="4 3" label={marker(c.label, i % 2, c.end)} />
         ))}
         <Line type="monotone" dataKey="value" name={name} stroke={color} strokeWidth={2} dot={false} activeDot={{ r: 4 }} connectNulls isAnimationActive={false} />
       </LineChart>
@@ -132,7 +166,7 @@ export function RequestsChart({ data, height = 200 }: { data: TrafficPoint[]; he
       <ComposedChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
         <CartesianGrid {...GRID} />
         <XAxis dataKey="ts" tickFormatter={hourLabel} tick={AXIS} tickLine={false} axisLine={false} minTickGap={36} />
-        <YAxis tick={AXIS} tickLine={false} axisLine={false} width={40} />
+        <YAxis tickFormatter={TICKS.num} tick={AXIS} tickLine={false} axisLine={false} width={40} allowDecimals={false} />
         <Tooltip cursor={{ fill: "var(--muted)", opacity: 0.4 }} content={<Tip fmt={{}} xFormat={hourLabel} />} />
         <Bar dataKey="ok" name="requests" stackId="a" fill="var(--chart-1)" radius={[0, 0, 0, 0]} isAnimationActive={false} />
         <Bar dataKey="errors" name="errors" stackId="a" fill="var(--danger)" radius={[2, 2, 0, 0]} isAnimationActive={false} />
@@ -147,7 +181,7 @@ export function LatencyChart({ data, height = 200 }: { data: TrafficPoint[]; hei
       <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
         <CartesianGrid {...GRID} />
         <XAxis dataKey="ts" tickFormatter={hourLabel} tick={AXIS} tickLine={false} axisLine={false} minTickGap={36} />
-        <YAxis tickFormatter={(v: number) => ms(v)} tick={AXIS} tickLine={false} axisLine={false} width={56} />
+        <YAxis tickFormatter={TICKS.ms} tick={AXIS} tickLine={false} axisLine={false} width={48} />
         <Tooltip cursor={{ stroke: "var(--border)" }} content={<Tip fmt={{ p50: FORMATS.ms, p95: FORMATS.ms }} xFormat={hourLabel} />} />
         <Legend iconType="plainline" wrapperStyle={{ fontSize: 11 }} />
         <Line type="monotone" dataKey="p50_ms" name="p50" stroke="var(--chart-2)" strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
@@ -158,12 +192,13 @@ export function LatencyChart({ data, height = 200 }: { data: TrafficPoint[]; hei
 }
 
 export function CostChart({ data, height = 200 }: { data: TrafficPoint[]; height?: number }) {
+  const ticks = niceTicks(Math.max(0, ...data.map((d) => d.cost_usd)));
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
         <CartesianGrid {...GRID} />
         <XAxis dataKey="ts" tickFormatter={hourLabel} tick={AXIS} tickLine={false} axisLine={false} minTickGap={36} />
-        <YAxis tickFormatter={(v: number) => usd(v, 2)} tick={AXIS} tickLine={false} axisLine={false} width={52} />
+        <YAxis tickFormatter={TICKS.usd} ticks={ticks} domain={[0, ticks[ticks.length - 1]]} tick={AXIS} tickLine={false} axisLine={false} width={52} />
         <Tooltip cursor={{ stroke: "var(--border)" }} content={<Tip fmt={{ spend: FORMATS.usd }} xFormat={hourLabel} />} />
         <Area type="monotone" dataKey="cost_usd" name="spend" stroke="var(--chart-3)" fill="var(--chart-3)" fillOpacity={0.18} strokeWidth={2} isAnimationActive={false} />
       </ComposedChart>

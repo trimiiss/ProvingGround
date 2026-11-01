@@ -195,7 +195,7 @@ function Flips({ c }: { c: Comparison }) {
                 {f.critical && <Chip tone="warning" dot={false}>critical</Chip>}
                 <span className="font-mono text-muted-foreground">{f.suite} / {f.case_id}</span>
               </div>
-              <p className="text-sm font-medium">{f.preview}</p>
+              <p className="text-sm font-medium [overflow-wrap:anywhere]">{f.preview}</p>
               <div className="grid gap-3 md:grid-cols-2">
                 <Side title="Baseline" text={f.baseline_text} />
                 <Side title="Candidate" text={f.candidate_text} />
@@ -213,7 +213,7 @@ function Side({ title, text }: { title: string; text: string }) {
   return (
     <div className="rounded-lg bg-muted/60 p-3">
       <p className="mb-1 text-[11px] font-medium text-muted-foreground uppercase">{title}</p>
-      <p className="text-sm whitespace-pre-wrap">{text || "(empty)"}</p>
+      <p className="text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">{text || "(empty)"}</p>
     </div>
   );
 }

@@ -157,7 +157,8 @@ def format_metric(metric: str, value: float | None) -> str:
     if metric.endswith("_ms"):
         return f"{value:,.0f} ms"
     if metric.startswith("cost."):
-        return f"${value:,.4f}" if value < 1 else f"${value:,.2f}"
+        sign, amount = ("-" if value < 0 else ""), abs(value)
+        return f"{sign}${amount:,.4f}" if amount < 1 else f"{sign}${amount:,.2f}"
     if metric.startswith("perf.") and "tokens" in metric:
         return f"{value:,.0f}"
     return f"{value:.3f}"

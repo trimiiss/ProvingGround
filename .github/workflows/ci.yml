@@ -76,6 +76,39 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
+  e2e:
+    # Whole stack in compose, a short seeded history, then the Playwright smoke test of the dashboard.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Start the stack
+        run: docker compose up -d --build --wait api worker web
+      - name: Seed a week of history
+        run: docker compose --profile tools run --rm seed python scripts/seed.py --reset --days 8 --sample 5 --traffic-hours 3
+      - name: Install Playwright
+        working-directory: web
+        run: npm ci && npx playwright install --with-deps chromium
+      - name: Smoke test
+        working-directory: web
+        env:
+          PG_WEB_URL: http://localhost:3000
+        run: npx playwright test
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: web/test-results
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose logs --tail 200 api worker web
+
   python-extras:
     # Real PyTorch NLI/classifier models plus DeepEval, Ragas and Inspect AI adapters.
     runs-on: ubuntu-latest

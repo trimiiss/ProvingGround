@@ -424,6 +424,26 @@ async def test_trace_becomes_a_regression_case(client: httpx.AsyncClient) -> Non
     assert (await client.get("/v1/datasets/incidents/cases")).json()["total"] == 1
 
 
+async def test_gate_runs_stay_out_of_health_and_trends(client: httpx.AsyncClient) -> None:
+    await client.post("/v1/admin/sync")
+    nightly = await make_run(model="sim/model-a", sample=10)
+    await push(client, nightly)
+    trial = await make_run(model="sim/model-b", sample=10)  # a candidate that never shipped
+    trial.labels = {**trial.labels, "role": "candidate"}
+    await push(client, trial)
+
+    agent = (await client.get("/v1/agents/support-bot")).json()
+    assert agent["latest_run"]["id"] == nightly.id
+    trend = (await client.get("/v1/agents/support-bot/trend")).json()
+    assert [p["run_id"] for p in trend] == [nightly.id]
+    overview = (await client.get("/v1/overview")).json()
+    row = next(a for a in overview["agents"] if a["agent"]["slug"] == "support-bot")
+    assert row["latest_run"]["id"] == nightly.id
+    assert (await client.get("/v1/runs", params={"agent": "support-bot"})).json()[
+        "total"
+    ] == 2  # still listed
+
+
 async def test_traffic_aggregates_and_health(client: httpx.AsyncClient) -> None:
     await client.post("/v1/admin/sync")
     for _ in range(3):
