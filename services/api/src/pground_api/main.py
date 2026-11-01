@@ -11,7 +11,7 @@ from sqlalchemy import text
 
 from . import metrics
 from .db.session import dispose_engine, init_engine, session_scope
-from .routers import compare, data, fleet, runs, traces
+from .routers import compare, data, fleet, packs, runs, traces
 from .settings import get_settings
 
 
@@ -51,6 +51,7 @@ def create_app() -> FastAPI:
         fleet.router,
         compare.router,
         data.router,
+        packs.router,
     ):
         app.include_router(router)
 

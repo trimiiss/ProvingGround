@@ -1,7 +1,8 @@
 """A Python callable as the target (e.g. an in-process agent).
 
-``entrypoint`` names a factory ``module:callable``. The factory receives ``args`` (and
-``root`` if it accepts it) and returns an object with:
+``entrypoint`` names a factory ``module:callable``; modules in the project folder (next to
+``provingground.yaml``) are importable. The factory receives ``args`` (and ``root`` if it
+accepts it) and returns an object with:
 
 * ``async invoke(case, ctx) -> TargetOutput | dict | str`` (required)
 * ``describe() -> dict`` (optional): model, description, canaries, forbidden_terms,
@@ -10,7 +11,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import inspect
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -19,11 +22,31 @@ from ..models import TargetInfo, TargetOutput, TestCase, ToolPolicy
 from .base import InvokeContext, Target
 
 
+def code_hash(factory: Any) -> str | None:
+    """Hash the factory's module and the .py files beside it: editing bot.py must change the
+    fingerprint, or the response cache would replay the old code's answers."""
+    try:
+        source = inspect.getsourcefile(factory)
+    except TypeError:
+        return None
+    if not source:
+        return None
+    digest = hashlib.sha256()
+    for file in sorted(Path(source).parent.glob("*.py")):
+        digest.update(file.name.encode())
+        digest.update(file.read_bytes())
+    return digest.hexdigest()[:16]
+
+
 class PythonTarget(Target):
     def __init__(self, name: str, config: TargetConfig, root: Path | None = None) -> None:
         super().__init__(name, config)
         assert config.entrypoint
+        # Appended, not prepended: a project's bot.py is found, but never shadows an installed package.
+        if root is not None and str(root) not in sys.path:
+            sys.path.append(str(root))
         factory = load_entrypoint(config.entrypoint)
+        self._code = code_hash(factory)
         kwargs = dict(config.args)
         if root is not None and "root" in inspect.signature(factory).parameters:
             kwargs.setdefault("root", str(root))
@@ -37,7 +60,7 @@ class PythonTarget(Target):
             name=self.name,
             kind="python",
             model=d.get("model") or self.config.model,
-            fingerprint=self._fingerprint(d.get("fingerprint_data")),
+            fingerprint=self._fingerprint({"data": d.get("fingerprint_data"), "code": self._code}),
             description=d.get("description") or self.config.description,
             canaries=[*self.config.canaries, *d.get("canaries", [])],
             forbidden_terms=[*self.config.forbidden_terms, *d.get("forbidden_terms", [])],

@@ -17,6 +17,7 @@ Everything runs offline. The demo company ("Acme Outfitters", 20 agents) runs on
 | **Regression testing and CI/CD gates** | Policy-as-code rules: absolute thresholds, non-inferiority margins, and critical cases that must pass. Exit code 1 blocks the merge and the deploy job never runs. Only the agents a PR changed are evaluated. |
 | **Tracing and monitoring** | OpenTelemetry GenAI spans over OTLP, a trace explorer with an "add to dataset" button, Prometheus metrics, alert rules and Grafana dashboards. |
 | **Online evaluation** | A sampled share of live traffic is scored without reference answers: faithfulness to the retrieved documents, secret and PII leaks, refusals. Drift alerts fire on the hourly means. |
+| **Upload your own agents** | Drop a test folder on the dashboard: its bots join the fleet and are evaluated and gated straight away. |
 | **Reports** | Markdown, HTML and JSON for every run, comparison and gate decision, plus a sticky PR comment. |
 
 ## Model A → Model B on a pull request
@@ -75,6 +76,15 @@ uv run python scripts/simulate_pr.py                                  # the PR f
 
 No `.env` is needed. `.env.example` lists the optional settings: real LLM keys, passwords, Langfuse.
 
+**New here?** [`examples/my-first-bot`](examples/my-first-bot/README.md) tests a tiny chatbot with
+two planted bugs in a minute, then shows how to point the same files at your own bot.
+
+**Test your own bots from the dashboard.** Open **Upload agent** (http://localhost:3000/upload) and
+drop a test folder: its bots join the fleet, are evaluated straight away and get a verdict. Try it
+with [`examples/upload-me`](examples/upload-me/README.md). To start with an empty fleet instead of
+the demo company, put `PGROUND_DEMO=false` in `.env` (see
+[Operations](docs/operations.md#uploading-agents-from-the-dashboard)).
+
 ## Architecture
 
 ```mermaid
@@ -121,6 +131,7 @@ flowchart LR
 
 ## Documentation
 
+* [Test your first chatbot](examples/my-first-bot/README.md): a step-by-step start for newcomers.
 * [Methodology](docs/methodology.md): eval hygiene, the statistics behind the gate, and how the graders are validated.
 * [Red teaming](docs/red-teaming.md): the goal × technique × converter taxonomy, the detectors, and the adaptive attacker.
 * [Adopting the gate](docs/adopting-the-gate.md): add the quality gate to another repository.

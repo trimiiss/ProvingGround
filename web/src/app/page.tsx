@@ -99,7 +99,15 @@ async function Fleet({ searchParams }: { searchParams: PageProps<"/">["searchPar
           </div>
         }
       >
-        {agents.length === 0 ? <Empty title="No agents match these filters" /> : (
+        {overview.agents.length === 0 ? (
+          <Empty title="No agents yet">
+            Drop a test folder on the{" "}
+            <Link href="/upload" className="font-medium text-primary hover:underline">
+              Upload agent
+            </Link>{" "}
+            page. To try it, use <code>examples/upload-me</code> from the repository.
+          </Empty>
+        ) : agents.length === 0 ? <Empty title="No agents match these filters" /> : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {agents.map((a) => <AgentCard key={a.agent.slug} a={a} />)}
           </div>

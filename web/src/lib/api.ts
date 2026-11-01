@@ -31,6 +31,7 @@ export type DatasetOut = S["DatasetOut"];
 export type ModelStats = S["ModelStats"];
 export type ConfigOut = S["ConfigOut"];
 export type ScheduleOut = S["ScheduleOut"];
+export type PackOut = S["PackOut"];
 
 export class ApiError extends Error {
   constructor(
@@ -121,6 +122,7 @@ export const getModels = (days = 30) => api<ModelStats[]>(`/v1/models${qs({ days
 export const getJobs = (q: Query = {}) => api<Page<JobOut>>(`/v1/jobs${qs(q)}`);
 export const getSchedules = () => api<ScheduleOut[]>("/v1/schedules");
 export const getConfig = () => api<ConfigOut>("/v1/config");
+export const getPacks = () => api<PackOut[]>("/v1/packs");
 
 /** Red-team summary (the API returns a plain dict, so it is typed here). */
 export interface AttackCell {

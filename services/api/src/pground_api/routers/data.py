@@ -13,6 +13,7 @@ from sqlalchemy import Text, cast, func, select, text
 from provingground.datasets import load_jsonl
 from provingground.models import TestCase
 
+from .. import packs
 from ..db import models as db
 from ..deps import Admin, Session, project_config
 from ..schemas import CaseIn, ConfigOut, DatasetOut, ModelStats, ScheduleIn, ScheduleOut
@@ -274,6 +275,16 @@ async def models(session: Session, days: Annotated[int, Query(ge=1, le=365)] = 3
 # --- config & sync ---------------------------------------------------------------------------
 
 
+def uploaded_gates() -> set[str]:
+    names: set[str] = set()
+    for pack in packs.names():
+        try:
+            names |= set(packs.pack_config(pack).gates)
+        except packs.PackError:
+            continue
+    return names
+
+
 @router.get("/config", response_model=ConfigOut)
 async def get_config() -> ConfigOut:
     cfg = project_config()
@@ -287,7 +298,7 @@ async def get_config() -> ConfigOut:
             {"name": n, "description": s.description, "scorers": [sc.name for sc in s.scorers]}
             for n, s in sorted(cfg.suites.items())
         ],
-        gates=sorted(cfg.gates),
+        gates=sorted(set(cfg.gates) | uploaded_gates()),
         providers=sorted(cfg.providers),
     )
 
@@ -321,10 +332,10 @@ async def sync_config(session: Session) -> dict[str, int]:
             session.add(db.Agent(slug=slug, **fields))
         counts["agents"] += 1
     in_fleet = {n for n, t in cfg.all_targets().items() if t.fleet}
-    for slug in [
-        s for s in existing if s not in in_fleet
-    ]:  # removed from the config: leaves the fleet (history stays)
-        await session.delete(existing[slug])
+    for slug, agent in existing.items():
+        # removed from the config: leaves the fleet (history stays); uploaded agents are not the config's
+        if slug not in in_fleet and not (agent.config or {}).get("pack"):
+            await session.delete(agent)
     known = {p.name: p for p in (await session.execute(select(db.GatePolicyRow))).scalars()}
     for name, policy in cfg.gates.items():
         if name not in known:

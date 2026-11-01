@@ -12,7 +12,7 @@ from provingground.models import Run as RunModel
 from provingground.redteam.report import summarize_attacks
 from provingground.report import render_run_reports
 
-from .. import queue, store
+from .. import packs, queue, store
 from ..db import models as db
 from ..deps import Admin, Session, project_config
 from ..schemas import JobIn, JobOut, Page, ResultBrief, ResultDetail, RunBrief, RunDetail
@@ -236,6 +236,14 @@ async def create_job(body: JobIn, session: Session) -> JobOut:
     cfg = project_config()
     target = body.payload.get("target")
     fleet_wide = body.kind == "online_eval" or (target == "*" and body.kind in ("run", "redteam"))
+    agent = await session.scalar(select(db.Agent).where(db.Agent.slug == target)) if target else None
+    pack = (agent.config or {}).get("pack") if agent is not None else None
+    if pack and not fleet_wide:  # an uploaded agent runs with its own folder's config
+        try:
+            cfg = packs.pack_config(pack)
+        except packs.PackError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        body.payload["pack"] = pack
     if not fleet_wide and (not target or target not in cfg.all_targets()):
         raise HTTPException(422, f"unknown target {target!r}; known: {sorted(cfg.all_targets())}")
     if body.kind == "gate" and body.payload.get("policy", "release") not in cfg.gates:

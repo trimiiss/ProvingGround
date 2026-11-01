@@ -583,6 +583,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Packs */
+        get: operations["list_packs_v1_packs_get"];
+        put?: never;
+        /**
+         * Upload Pack
+         * @description Install a folder (provingground.yaml + datasets) and queue one evaluation per bot in it.
+         */
+        post: operations["upload_pack_v1_packs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/packs/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Pack
+         * @description Remove an uploaded folder and its agents from the fleet (their past runs stay in history).
+         */
+        delete: operations["delete_pack_v1_packs__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -1187,6 +1228,40 @@ export interface components {
             runs_7d: number;
             /** Gate Failures 7D */
             gate_failures_7d: number;
+        };
+        /** PackIn */
+        PackIn: {
+            /**
+             * Files
+             * @description relative path -> text content, e.g. a dropped folder
+             */
+            files: {
+                [key: string]: string;
+            };
+        };
+        /** PackOut */
+        PackOut: {
+            /** Name */
+            name: string;
+            /** Agents */
+            agents: string[];
+            /** Files */
+            files: string[];
+            /** Gate */
+            gate?: string | null;
+        };
+        /** PackUploaded */
+        PackUploaded: {
+            /** Name */
+            name: string;
+            /** Agents */
+            agents: string[];
+            /** Files */
+            files: string[];
+            /** Gate */
+            gate?: string | null;
+            /** Jobs */
+            jobs: components["schemas"]["JobOut"][];
         };
         /** Page[JobOut] */
         Page_JobOut_: {
@@ -3293,6 +3368,103 @@ export interface operations {
                         [key: string]: number;
                     };
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_packs_v1_packs_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_pack_v1_packs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PackIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackUploaded"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_pack_v1_packs__name__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

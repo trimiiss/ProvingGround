@@ -517,3 +517,112 @@ async def test_models_leaderboard_and_pareto(client: httpx.AsyncClient) -> None:
     assert (
         models["sim/model-b"]["on_pareto_front"] and models["sim/model-c"]["on_pareto_front"]
     )  # cheapest + best value
+
+
+# --- uploaded folders ------------------------------------------------------------------------
+
+
+def folder(name: str) -> dict[str, str]:
+    """A folder as the dashboard uploads it: paths keep the dropped folder's own name."""
+    root = ROOT / "examples" / name
+    return {f"{name}/{p.name}": p.read_text(encoding="utf-8") for p in sorted(root.iterdir()) if p.is_file()}
+
+
+@pytest.fixture
+def uploads(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    from pground_api.settings import get_settings
+
+    monkeypatch.setenv("PGROUND_PACKS_DIR", str(tmp_path / "packs"))
+    monkeypatch.setenv("PGROUND_ALLOW_CODE_UPLOADS", "true")
+    get_settings.cache_clear()
+    yield tmp_path / "packs"
+    get_settings.cache_clear()
+
+
+async def test_an_uploaded_folder_joins_the_fleet_and_is_judged(client: httpx.AsyncClient, uploads) -> None:
+    from pground_api import queue, worker
+
+    resp = await client.post("/v1/packs", json={"files": folder("my-first-bot")})
+    assert resp.status_code == 201, resp.text
+    pack = resp.json()
+    assert pack["name"] == "my-first-bot" and pack["agents"] == ["shop-bot"] and pack["gate"] == "release"
+    assert "bot.py" in pack["files"] and (uploads / "my-first-bot" / "provingground.yaml").is_file()
+    claimed = await queue.claim("w")
+    assert claimed is not None and claimed.payload["pack"] == "my-first-bot"
+    await worker.execute(claimed, "w")
+    job = (await client.get(f"/v1/jobs/{pack['jobs'][0]['id']}")).json()
+    assert job["status"] == "succeeded", job["error"]
+    assert job["result"]["verdict"] == "FAIL"  # both planted bugs: a wrong answer and a leaked secret
+    gate = (await client.get(f"/v1/gates/evaluations/{job['result']['evaluation_id']}")).json()
+    assert {r["verdict"] for r in gate["result"]["rules"]} == {"FAIL"}
+    agent = (await client.get("/v1/agents/shop-bot")).json()
+    assert agent["agent"]["team"] == "my-first-bot" and agent["latest_run"]["id"] == job["result"]["run_id"]
+    assert agent["gate"]["verdict"] == "FAIL"  # an upload's run is a normal run: it shows in health
+
+    # a job launched later from the dashboard finds the folder by itself
+    again = (await client.post("/v1/jobs", json={"kind": "run", "payload": {"target": "shop-bot"}})).json()
+    assert again["payload"]["pack"] == "my-first-bot"
+    # re-syncing the demo config leaves uploaded agents alone
+    await client.post("/v1/admin/sync")
+    assert "shop-bot" in {a["slug"] for a in (await client.get("/v1/agents")).json()}
+    # re-uploading replaces the folder; removing it takes its agents out of the fleet
+    assert (await client.post("/v1/packs", json={"files": folder("my-first-bot")})).status_code == 201
+    assert [p["name"] for p in (await client.get("/v1/packs")).json()] == ["my-first-bot"]
+    assert (await client.delete("/v1/packs/my-first-bot")).status_code == 204
+    assert (await client.get("/v1/agents/shop-bot")).status_code == 404
+    assert not (uploads / "my-first-bot").exists()
+
+
+async def test_uploads_that_cannot_be_trusted_or_run_are_refused(
+    client: httpx.AsyncClient, uploads, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pground_api.settings import get_settings
+
+    good = folder("my-first-bot")
+    yaml_key = "my-first-bot/provingground.yaml"
+
+    async def refused(files: dict[str, str], status: int = 422) -> str:
+        resp = await client.post("/v1/packs", json={"files": files})
+        assert resp.status_code == status, resp.text
+        return resp.json()["detail"]
+
+    assert "no provingground.yaml" in await refused(
+        {"x/questions.jsonl": good["my-first-bot/questions.jsonl"]}
+    )
+    assert "bad file path" in await refused({**good, "../escape.py": "x = 1"})
+    assert "providers" in await refused(
+        {**good, yaml_key: good[yaml_key] + "providers:\n  evil: {base_url: 'http://evil'}\n"}
+    )
+    outside = good[yaml_key].replace("dataset: questions.jsonl", "dataset: ../../provingground.yaml")
+    assert "inside the folder" in await refused({**good, yaml_key: outside})
+    await client.post("/v1/admin/sync")  # the demo fleet owns support-bot
+    taken = good[yaml_key].replace("shop-bot:", "support-bot:")
+    assert "already exists" in await refused({**good, yaml_key: taken}, 409)
+
+    monkeypatch.setenv("PGROUND_ALLOW_CODE_UPLOADS", "false")
+    get_settings.cache_clear()
+    assert "turned off" in await refused(good)
+    assert not [p for p in uploads.iterdir() if not p.name.startswith(".")]  # nothing was installed
+    assert not list(uploads.glob(".incoming-*"))  # and nothing was left behind
+
+
+async def test_demo_off_starts_with_an_empty_fleet(
+    client: httpx.AsyncClient, uploads, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pground_api.deps import project_config
+    from pground_api.settings import get_settings
+
+    await client.post("/v1/admin/sync")
+    monkeypatch.setenv("PGROUND_DEMO", "false")
+    get_settings.cache_clear()
+    project_config.cache_clear()
+    try:
+        assert (await client.post("/v1/admin/sync")).json()["agents"] == 0
+        assert (await client.get("/v1/agents")).json() == []  # the demo agents left the fleet
+        assert (await client.get("/v1/config")).json()["targets"] == []
+        assert (await client.post("/v1/packs", json={"files": folder("my-first-bot")})).status_code == 201
+        assert [a["slug"] for a in (await client.get("/v1/agents")).json()] == ["shop-bot"]
+    finally:
+        monkeypatch.setenv("PGROUND_DEMO", "true")
+        get_settings.cache_clear()
+        project_config.cache_clear()

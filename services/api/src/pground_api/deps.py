@@ -48,5 +48,10 @@ Ingest = Depends(require_ingest)
 
 @lru_cache
 def project_config() -> ProjectConfig:
-    """The repo's provingground.yaml (targets, suites, gate policies)."""
-    return load_config(get_settings().config_path)
+    """The repo's provingground.yaml (targets, suites, gate policies), or nothing with ``demo`` off."""
+    settings = get_settings()
+    if not settings.demo:
+        cfg = ProjectConfig(project="uploads")
+        cfg._root = settings.packs_dir
+        return cfg
+    return load_config(settings.config_path)

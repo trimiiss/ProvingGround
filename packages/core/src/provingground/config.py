@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import os
 import re
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal
 
@@ -274,13 +275,13 @@ def load_entrypoint(spec: str) -> Any:
     return obj
 
 
-def _interpolate(value: Any) -> Any:
+def _interpolate(value: Any, env: Mapping[str, str]) -> Any:
     if isinstance(value, str):
-        return _ENV_RE.sub(lambda m: os.environ.get(m.group(1), m.group(2) or ""), value)
+        return _ENV_RE.sub(lambda m: env.get(m.group(1), m.group(2) or ""), value)
     if isinstance(value, list):
-        return [_interpolate(v) for v in value]
+        return [_interpolate(v, env) for v in value]
     if isinstance(value, dict):
-        return {k: _interpolate(v) for k, v in value.items()}
+        return {k: _interpolate(v, env) for k, v in value.items()}
     return value
 
 
@@ -293,7 +294,8 @@ def find_config(start: Path | None = None) -> Path | None:
     return None
 
 
-def load_config(path: str | Path | None = None) -> ProjectConfig:
+def load_config(path: str | Path | None = None, *, env: Mapping[str, str] | None = None) -> ProjectConfig:
+    """Load and validate a config; ``${VAR:-default}`` reads ``env`` (default: the process environment)."""
     cfg_path = Path(path) if path else find_config()
     if cfg_path is None:
         cfg = ProjectConfig()
@@ -305,7 +307,7 @@ def load_config(path: str | Path | None = None) -> ProjectConfig:
         raise ConfigError(f"config file not found: {cfg_path}")
     raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
     try:
-        cfg = ProjectConfig.model_validate(_interpolate(raw))
+        cfg = ProjectConfig.model_validate(_interpolate(raw, os.environ if env is None else env))
     except ValueError as exc:
         raise ConfigError(f"{cfg_path}: {exc}") from exc
     cfg._root = cfg_path.parent.resolve()

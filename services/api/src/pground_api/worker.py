@@ -15,11 +15,12 @@ from croniter import croniter
 from sqlalchemy import select
 
 from provingground.compare import compare_runs
+from provingground.config import ProjectConfig
 from provingground.engine import resolve_suites, run_target, settings_from_config
 from provingground.gate import evaluate_gate
 from provingground.runner import RunSettings
 
-from . import queue, store
+from . import packs, queue, store
 from .db import models as db
 from .db.session import init_engine, session_scope
 from .deps import project_config
@@ -42,8 +43,18 @@ class Progress:
         self.value = done / total if total else 0.0
 
 
+def config_for(payload: dict[str, Any]) -> ProjectConfig:
+    """The demo config, or the uploaded folder the agent came from."""
+    return packs.pack_config(payload["pack"]) if payload.get("pack") else project_config()
+
+
+def code_scope(payload: dict[str, Any], cfg: ProjectConfig) -> contextlib.AbstractContextManager[None]:
+    """An uploaded folder's own modules (its bot.py) stay out of the next job's imports."""
+    return packs.isolated_imports(cfg.root) if payload.get("pack") else contextlib.nullcontext()
+
+
 def _settings(payload: dict[str, Any]) -> RunSettings:
-    cfg = project_config()
+    cfg = config_for(payload)
     return settings_from_config(
         cfg,
         sample=payload.get("sample"),
@@ -69,30 +80,40 @@ async def handle_run(job: db.Job, progress: Progress) -> dict[str, Any]:
     p = job.payload
     if p.get("target") == "*":
         return await fan_out(job)
-    cfg = project_config()
+    cfg = config_for(p)
     kind = "redteam" if job.kind == "redteam" else "eval"
     suites = p.get("suites")
     if kind == "redteam" and not suites:
         suites = [
             s for s in cfg.target(p["target"]).suites if s.startswith("security-") or s == "over-refusal"
         ]
-    run = await run_target(
-        cfg,
-        p["target"],
-        suites=suites,
-        settings=_settings(p),
-        overrides=p.get("overrides") or {},
-        labels={**(p.get("labels") or {}), "kind": kind, "job": str(job.id)},
-        progress=progress,
-    )
+    with code_scope(p, cfg):
+        run = await run_target(
+            cfg,
+            p["target"],
+            suites=suites,
+            settings=_settings(p),
+            overrides=p.get("overrides") or {},
+            labels={**(p.get("labels") or {}), "kind": kind, "job": str(job.id)},
+            progress=progress,
+        )
+    out: dict[str, Any] = {
+        "run_id": run.id, "pass_rate": run.summary.pass_rate, "n_results": run.summary.n_results,
+    }  # fmt: skip
     async with session_scope() as session:
         await store.save_run(session, run)
-    return {"run_id": run.id, "pass_rate": run.summary.pass_rate, "n_results": run.summary.n_results}
+        if p.get("gate"):  # e.g. an upload: judge the run against the folder's absolute rules too
+            name = p["gate"]
+            policy = cfg.gates[name] if p.get("pack") else await policy_for(session, name)
+            result = evaluate_gate(policy, name, run, None)
+            row = await record_gate(session, result)
+            out |= {"verdict": str(result.verdict), "evaluation_id": row.id}
+    return out
 
 
 async def handle_gate(job: db.Job, progress: Progress) -> dict[str, Any]:
     p = job.payload
-    cfg = project_config()
+    cfg = config_for(p)
     target = p["target"]
     policy_name = p.get("policy", "release")
     settings = _settings(p)
@@ -100,31 +121,32 @@ async def handle_gate(job: db.Job, progress: Progress) -> dict[str, Any]:
     baseline_run = None
     suites = p.get("suites")
     async with session_scope() as session:
-        policy = await policy_for(session, policy_name)
+        policy = cfg.gates[policy_name] if p.get("pack") else await policy_for(session, policy_name)
         if p.get("baseline_run_id"):
             baseline_run = await store.load_run(session, p["baseline_run_id"])
             if baseline_run is None:
                 raise ValueError(f"baseline run {p['baseline_run_id']!r} not found")
             suites = [s.name for s in baseline_run.suites]
     suites = suites or resolve_suites(cfg, cfg.target(target).with_overrides(candidate_over), None)
-    candidate = await run_target(
-        cfg,
-        target,
-        suites=suites,
-        settings=settings,
-        overrides=candidate_over,
-        labels={"role": "candidate", "kind": "eval", "job": str(job.id)},
-        progress=progress,
-    )
-    if baseline_run is None:
-        baseline_run = await run_target(
+    with code_scope(p, cfg):
+        candidate = await run_target(
             cfg,
             target,
             suites=suites,
             settings=settings,
-            overrides=p.get("baseline_overrides") or {},
-            labels={"role": "baseline", "kind": "eval", "job": str(job.id)},
+            overrides=candidate_over,
+            labels={"role": "candidate", "kind": "eval", "job": str(job.id)},
+            progress=progress,
         )
+        if baseline_run is None:
+            baseline_run = await run_target(
+                cfg,
+                target,
+                suites=suites,
+                settings=settings,
+                overrides=p.get("baseline_overrides") or {},
+                labels={"role": "baseline", "kind": "eval", "job": str(job.id)},
+            )
     comparison = compare_runs(baseline_run, candidate, confidence=policy.confidence)
     result = evaluate_gate(policy, policy_name, candidate, comparison)
     async with session_scope() as session:

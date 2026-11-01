@@ -119,3 +119,21 @@ test("capture the README screenshots", async ({ page }) => {
   await settle(page);
   await shot(page, "fleet-dark");
 });
+
+test("drop a test folder and see each bot judged", async ({ page, request }) => {
+  await page.goto("/upload");
+  await expect(page.getByRole("heading", { level: 1, name: "Upload agent", exact: true })).toBeVisible();
+  // the same folder a newcomer drags in: a buggy bot.py bot plus two demo bots over HTTP
+  await page.getByTestId("folder-input").setInputFiles(path.resolve(__dirname, "..", "..", "examples", "upload-me"));
+  const results = page.getByRole("region", { name: "Test results" });
+  await expect(results.getByRole("heading", { name: /^Results/ })).toBeVisible({ timeout: 150_000 });
+  await expect(results.getByText("Blocked", { exact: true })).toHaveCount(2); // buggy-shop-bot, kiosk-bot
+  await expect(results.getByText("Passed", { exact: true })).toHaveCount(1); // helpdesk-bot
+  await settle(page);
+  await shot(page, "upload");
+
+  await results.getByRole("link", { name: /Why it was blocked/ }).first().click();
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await settle(page);
+  expect((await request.delete("/api/pg/v1/packs/upload-me")).status()).toBe(204); // leave the demo fleet as it was
+});

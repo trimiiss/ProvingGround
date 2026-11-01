@@ -51,6 +51,7 @@ def database_url() -> Iterator[str]:
     url = ADMIN_URL.rsplit("/", 1)[0].replace("postgresql://", "postgresql+asyncpg://") + f"/{name}"
     os.environ["PGROUND_DATABASE_URL"] = url
     os.environ["PGROUND_CONFIG_PATH"] = str(ROOT / "provingground.yaml")
+    os.environ["PGROUND_DEMO"] = "true"  # the tests use the demo fleet, whatever a local .env says
     from alembic import command
     from alembic.config import Config
 

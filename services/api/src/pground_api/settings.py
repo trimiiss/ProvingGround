@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     api_key: str = "dev-admin-key"
     ingest_key: str = "dev-ingest-key"
     config_path: Path = Path("provingground.yaml")
+    # false: start with an empty fleet (no demo company) and add agents by uploading folders
+    demo: bool = True
+    # uploaded test folders ("packs"); the API and the worker must share this directory
+    packs_dir: Path = Path(".provingground/packs")
+    # Python code in an uploaded folder (bot.py) runs inside the worker: enable only on a machine
+    # you control, never on a dashboard other people can reach
+    allow_code_uploads: bool = False
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
     )

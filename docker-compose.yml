@@ -15,6 +15,14 @@ x-python: &python
     PGROUND_INGEST_KEY: ${PGROUND_INGEST_KEY:-dev-ingest-key}
     PGROUND_CONFIG_PATH: /app/provingground.yaml
     DEMO_AGENTS_URL: http://demo-agents:8100
+    # false: no demo company, an empty fleet you fill by uploading folders (set it in .env)
+    PGROUND_DEMO: ${PGROUND_DEMO:-true}
+    # uploaded folders, shared by the API and the worker
+    PGROUND_PACKS_DIR: /data/packs
+    # a bot.py in an uploaded folder runs in the worker: fine on your own machine, never on a shared one
+    PGROUND_ALLOW_CODE_UPLOADS: ${PGROUND_ALLOW_CODE_UPLOADS:-true}
+  volumes:
+    - packs:/data/packs
 
 services:
   postgres:
@@ -130,5 +138,6 @@ services:
 
 volumes:
   pgdata:
+  packs:
   promdata:
   grafanadata:

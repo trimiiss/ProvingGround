@@ -1,6 +1,7 @@
 import {
   Activity,
   Database,
+  FolderUp,
   GitCompareArrows,
   LayoutDashboard,
   ListChecks,
@@ -28,6 +29,7 @@ export const NAV: { group: string; items: NavItem[] }[] = [
   {
     group: "Evaluate",
     items: [
+      { href: "/upload", label: "Upload agent", icon: FolderUp },
       { href: "/runs", label: "Runs", icon: ListChecks },
       { href: "/compare", label: "Compare", icon: GitCompareArrows },
       { href: "/redteam", label: "Red team", icon: ShieldAlert },

@@ -76,6 +76,32 @@ PGROUND_DATABASE_URL=postgresql+asyncpg://postgres.<project-ref>:<password>@aws-
 * Keep the local Postgres container for development, tests and CI: tests create and drop
   throwaway databases.
 
+## Uploading agents from the dashboard
+
+The **Upload agent** page takes a test folder: a `provingground.yaml` with its datasets and, for a
+Python bot, its code. Each target in it joins the fleet as an agent (its team is the folder's
+`project` name), is evaluated straight away, and gets a verdict from the folder's `release` gate.
+Dropping a folder with the same `project` again replaces it; that is how you re-test after a fix.
+`examples/upload-me` is a ready-made folder with three bots.
+
+Folders are stored in `PGROUND_PACKS_DIR`, which the API and the worker must share (a volume in
+`docker-compose.yml`). An upload is untrusted input, so it may not define `providers` (they would
+receive the server's API keys), may not use `target_sources`, may read only `DEMO_AGENTS_URL` from
+the environment, and must keep its datasets inside the folder. Python targets and generated suites
+run code in the worker: they are accepted only with `PGROUND_ALLOW_CODE_UPLOADS=true`, which the
+local compose stack sets and a shared server should not.
+
+**Starting empty.** `PGROUND_DEMO=false` (in `.env`) leaves the demo company out: the fleet holds
+only what you upload. To clear everything that is already stored:
+
+```bash
+docker compose down
+docker volume rm provingground_pgdata provingground_promdata provingground_packs
+docker compose up -d
+```
+
+Set `PGROUND_DEMO=true` (or remove the line) and run the seed command to bring the demo back.
+
 ## Configuration reference
 
 | Variable | Default | Used by |
@@ -87,3 +113,6 @@ PGROUND_DATABASE_URL=postgresql+asyncpg://postgres.<project-ref>:<password>@aws-
 | `PGROUND_OTLP_ENDPOINT` | — | agents (where to send traces) |
 | `PGROUND_TRACE_CONTENT` | `1` | agents (record prompts and answers on spans) |
 | `PGROUND_SIM_TIME_SCALE` | `0` (compose demo: `0.25`) | simulated models: how much of the simulated latency to actually sleep |
+| `PGROUND_DEMO` | `true` | API, worker: include the demo company's 20 agents |
+| `PGROUND_PACKS_DIR` | `.provingground/packs` (compose: `/data/packs`) | API, worker: uploaded test folders |
+| `PGROUND_ALLOW_CODE_UPLOADS` | `false` (compose: `true`) | API, worker: accept uploads that run Python code |

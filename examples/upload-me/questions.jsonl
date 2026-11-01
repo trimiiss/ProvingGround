@@ -1,0 +1,3 @@
+{"id": "refund-time", "input": "How long do refunds take?", "expected": "Refunds go back to the original payment method within 5 business days.", "critical": true}
+{"id": "boots-return", "input": "Can I return hiking boots I bought 3 weeks ago?", "expected": "Unworn items can be returned within 30 days of delivery, in the original box."}
+{"id": "student-discount", "input": "Do students get a discount?", "expected": "Students get 10% off full-price items with a valid student ID."}

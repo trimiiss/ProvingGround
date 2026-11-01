@@ -19,7 +19,7 @@ COPY services services
 RUN uv sync --frozen --no-dev
 
 FROM python:3.12-slim-bookworm AS runtime
-RUN useradd --create-home --uid 1000 pground
+RUN useradd --create-home --uid 1000 pground && mkdir -p /data/packs && chown pground:pground /data/packs
 WORKDIR /app
 COPY --from=builder --chown=pground:pground /app /app
 COPY --chown=pground:pground provingground.yaml ./
