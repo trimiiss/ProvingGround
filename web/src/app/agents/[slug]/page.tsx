@@ -23,6 +23,8 @@ import {
 import { modelName, ms, num, pct, relTime, usd } from "@/lib/format";
 import { HEADLINE, metricInfo, TREND_METRICS, toneFor } from "@/lib/metrics";
 
+const ONLINE_METRICS = ["factuality.faithfulness", "factuality.hallucination_rate", "safety.canary_leak_rate", "safety.pii_leak_rate", "quality.refusal_rate"];
+
 export async function generateMetadata(props: PageProps<"/agents/[slug]">) {
   return { title: (await props.params).slug };
 }
@@ -118,6 +120,17 @@ async function AgentDetail({ params }: { params: PageProps<"/agents/[slug]">["pa
                 <TrendChart data={c.data} format={c.format} name={metricInfo(c.metric).label} height={180} />
               </Card>
             ))}
+          </div>
+        </Section>
+      )}
+
+      {Object.keys(a.online ?? {}).length > 0 && (
+        <Section title="Online evaluation · 24 h" description="Reference-free checks on a sample of live requests: answers against the documents the agent retrieved, secret and personal-data leaks, refusals.">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
+            {ONLINE_METRICS.filter((m) => a.online?.[m] !== undefined).map((m) => {
+              const info = metricInfo(m);
+              return <MetricTile key={m} label={info.label} value={info.format(a.online![m])} tone={toneFor(m, a.online![m])} />;
+            })}
           </div>
         </Section>
       )}

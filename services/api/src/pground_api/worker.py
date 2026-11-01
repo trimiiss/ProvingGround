@@ -23,6 +23,7 @@ from . import queue, store
 from .db import models as db
 from .db.session import init_engine, session_scope
 from .deps import project_config
+from .online import run_online_eval
 from .routers.compare import policy_for, record_gate
 from .settings import get_settings
 
@@ -52,8 +53,22 @@ def _settings(payload: dict[str, Any]) -> RunSettings:
     )
 
 
+async def fan_out(job: db.Job) -> dict[str, Any]:
+    """``target: "*"`` (e.g. the nightly schedule): one job per fleet agent that has suites."""
+    cfg = project_config()
+    names = sorted(n for n, t in cfg.all_targets().items() if t.fleet and t.suites)
+    if job.kind == "redteam":
+        names = [n for n in names if any(s.startswith("security-") for s in cfg.all_targets()[n].suites)]
+    async with session_scope() as session:
+        for name in names:
+            await queue.enqueue(session, job.kind, {**job.payload, "target": name})
+    return {"enqueued": len(names), "targets": names}
+
+
 async def handle_run(job: db.Job, progress: Progress) -> dict[str, Any]:
     p = job.payload
+    if p.get("target") == "*":
+        return await fan_out(job)
     cfg = project_config()
     kind = "redteam" if job.kind == "redteam" else "eval"
     suites = p.get("suites")
@@ -126,7 +141,23 @@ async def handle_gate(job: db.Job, progress: Progress) -> dict[str, Any]:
     }
 
 
-HANDLERS: dict[str, Handler] = {"run": handle_run, "redteam": handle_run, "gate": handle_gate}
+async def handle_online_eval(job: db.Job, progress: Progress) -> dict[str, Any]:
+    p = job.payload
+    async with session_scope() as session:
+        return await run_online_eval(
+            session,
+            hours=float(p.get("hours", 1)),
+            rate=float(p.get("rate", 0.2)),
+            limit=int(p.get("limit", 300)),
+        )
+
+
+HANDLERS: dict[str, Handler] = {
+    "run": handle_run,
+    "redteam": handle_run,
+    "gate": handle_gate,
+    "online_eval": handle_online_eval,
+}
 
 
 async def execute(job: db.Job, worker_id: str) -> None:

@@ -1006,7 +1006,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "run" | "redteam" | "gate";
+            kind: "run" | "redteam" | "gate" | "online_eval";
             /** Payload */
             payload?: {
                 [key: string]: unknown;
@@ -1488,7 +1488,7 @@ export interface components {
              * Job Kind
              * @enum {string}
              */
-            job_kind: "run" | "redteam" | "gate";
+            job_kind: "run" | "redteam" | "gate" | "online_eval";
             /** Payload */
             payload?: {
                 [key: string]: unknown;
@@ -1509,7 +1509,7 @@ export interface components {
              * Job Kind
              * @enum {string}
              */
-            job_kind: "run" | "redteam" | "gate";
+            job_kind: "run" | "redteam" | "gate" | "online_eval";
             /** Payload */
             payload?: {
                 [key: string]: unknown;

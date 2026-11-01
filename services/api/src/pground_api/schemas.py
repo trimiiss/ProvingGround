@@ -187,7 +187,7 @@ class TraceDetail(BaseModel):
 
 
 class JobIn(BaseModel):
-    kind: Literal["run", "redteam", "gate"]
+    kind: Literal["run", "redteam", "gate", "online_eval"]
     payload: dict[str, Any] = Field(default_factory=dict)
     priority: int = 0
 
@@ -235,7 +235,7 @@ class TraceToDataset(BaseModel):
 class ScheduleIn(BaseModel):
     name: str
     cron: str
-    job_kind: Literal["run", "redteam", "gate"]
+    job_kind: Literal["run", "redteam", "gate", "online_eval"]
     payload: dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True
 

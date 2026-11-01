@@ -37,6 +37,7 @@ export const METRICS: Record<string, MetricInfo> = {
   "perf.input_tokens_mean": { label: "Input tokens", lowerIsBetter: true, format: (v) => num(v) },
   "perf.output_tokens_mean": { label: "Output tokens", lowerIsBetter: true, format: (v) => num(v) },
   "cost.per_1k_requests_usd": { label: "Cost / 1k requests", lowerIsBetter: true, format: (v) => usd(v) },
+  "quality.refusal_rate": rate("Refusal rate", "Live requests the agent refused"),
   "reliability.error_rate": rate("Error rate"),
   "reliability.timeout_rate": rate("Timeout rate"),
   "reliability.truncation_rate": rate("Truncation rate"),
@@ -75,6 +76,9 @@ export function toneFor(name: string, v: number | null | undefined): Tone {
     "factuality.hallucination_rate": [0.05, 0.12],
     "safety.attack_success_rate": [0.02, 0.1],
     "safety.false_refusal_rate": [0.05, 0.1],
+    "safety.canary_leak_rate": [0, 0.01],
+    "safety.pii_leak_rate": [0, 0.01],
+    "quality.refusal_rate": [0.1, 0.2],
     "reliability.error_rate": [0.01, 0.05],
   };
   const th = t[name];

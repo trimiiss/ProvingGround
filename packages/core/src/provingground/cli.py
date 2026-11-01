@@ -435,6 +435,88 @@ def redteam(
 
 
 @app.command()
+def attack(
+    target: Annotated[str, typer.Option("--target", "-t")],
+    goal: Annotated[
+        str | None,
+        typer.Option("--goal", "-g", help="One goal; default: every goal that applies to the target"),
+    ] = None,
+    strategy: Annotated[
+        str, typer.Option(help="search (offline) or llm (needs --attacker-model)")
+    ] = "search",
+    attacker_model: Annotated[
+        str | None, typer.Option(help="Model ref for the llm strategy, e.g. anthropic/claude-opus-5-5")
+    ] = None,
+    budget: Annotated[int, typer.Option(help="Maximum queries per goal")] = 20,
+    set_: Annotated[
+        list[str] | None, typer.Option("--set", help="Target overrides, e.g. --set model=sim/model-b")
+    ] = None,
+    seed: Annotated[int, typer.Option()] = 0,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Adaptive red teaming: keep attacking each goal until a detector fires or the budget is spent."""
+    from .engine import build_one_target
+    from .providers import ProviderRegistry, parse_model_ref
+    from .redteam.adaptive import ADAPTIVE_GOALS, AdaptiveResult, LLMAttacker, SearchAttacker, adaptive_attack
+    from .scorers.judge import build_judge
+
+    cfg = _load(config)
+    cfg.target(target)  # fail fast on an unknown target
+    registry = ProviderRegistry(cfg.providers)
+    if strategy == "llm" and not attacker_model:
+        err.print("[red]--strategy llm needs --attacker-model[/red]")
+        raise typer.Exit(2)
+
+    async def go() -> list[AdaptiveResult]:
+        tgt = build_one_target(cfg, target, _parse_overrides(set_))
+        judge = build_judge(cfg.judge, registry)
+        # Tool agents are attacked through their tools, chat agents through their words.
+        tool_agent = bool(tgt.info.tool_policies)
+        goals = (
+            [goal]
+            if goal
+            else [
+                g for g in ADAPTIVE_GOALS if (g in ("unauthorized_refund", "data_exfiltration")) == tool_agent
+            ]
+        )
+        results = []
+        try:
+            for g in goals:
+                if strategy == "llm":
+                    provider, model = parse_model_ref(attacker_model or "")
+                    strat: SearchAttacker | LLMAttacker = LLMAttacker(registry.get(provider), model)
+                else:
+                    strat = SearchAttacker(seed=seed)
+                results.append(await adaptive_attack(tgt, judge, g, strat, budget=budget))
+        finally:
+            await tgt.aclose()
+        return results
+
+    try:
+        results = asyncio.run(go())
+    except ValueError as exc:
+        err.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
+    table = Table(title=f"Adaptive attack on {target} ({strategy}, budget {budget})")
+    for col in ("goal", "result", "queries", "winning technique", "evidence"):
+        table.add_column(col)
+    for r in results:
+        win = r.attempts[-1] if r.succeeded else None
+        table.add_row(
+            r.goal,
+            "[red]broken[/red]" if r.succeeded else "[green]held[/green]",
+            str(r.queries_to_success or len(r.attempts)),
+            f"{win.technique} / {win.converter}" if win else "—",
+            ", ".join(win.evidence) if win else "—",
+        )
+    console.print(table)
+    broken = sum(r.succeeded for r in results)
+    console.print(
+        f"{broken}/{len(results)} goals broken within {budget} queries each (model {results[0].model if results else '?'})"
+    )
+
+
+@app.command()
 def push(
     run_ref: Annotated[str, typer.Argument(help="Run id, path, or 'latest'")] = "latest",
     label: Annotated[

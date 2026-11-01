@@ -189,6 +189,49 @@ async def test_job_lifecycle_through_the_worker(client: httpx.AsyncClient) -> No
     assert (await client.get(f"/v1/runs/{done['result']['run_id']}")).status_code == 200
 
 
+async def test_fleet_wide_run_fans_out_one_job_per_agent(client: httpx.AsyncClient) -> None:
+    from pground_api import queue, worker
+
+    job = (
+        await client.post("/v1/jobs", json={"kind": "run", "payload": {"target": "*", "sample": 2}})
+    ).json()
+    claimed = await queue.claim("test-worker")
+    assert claimed is not None and str(claimed.id) == job["id"]
+    await worker.execute(claimed, "test-worker")
+    result = (await client.get(f"/v1/jobs/{job['id']}")).json()["result"]
+    assert result["enqueued"] == 20 and "support-bot" in result["targets"]
+    queued = (await client.get("/v1/jobs", params={"status": "queued", "limit": 50})).json()
+    assert queued["total"] == 20 and {j["payload"]["target"] for j in queued["items"]} == set(
+        result["targets"]
+    )
+
+
+async def test_online_eval_scores_sampled_live_traffic_once(client: httpx.AsyncClient) -> None:
+    from pground_api import queue, worker
+
+    await client.post("/v1/admin/sync")
+    # Prometheus counters are process-wide, so this uses an agent no other test sends traffic for.
+    for error in (False, False, True):
+        body, ctype = otlp_payload("returns-assistant", error=error)
+        await client.post("/v1/traces", content=body, headers={**INGEST, "content-type": ctype})
+
+    async def run_job() -> dict:
+        job = (await client.post("/v1/jobs", json={"kind": "online_eval", "payload": {"rate": 1.0}})).json()
+        claimed = await queue.claim("test-worker")
+        assert claimed is not None and str(claimed.id) == job["id"]
+        await worker.execute(claimed, "test-worker")
+        return (await client.get(f"/v1/jobs/{job['id']}")).json()["result"]
+
+    first = await run_job()
+    assert first["scored"] == 2  # the errored request is left to the error-rate metrics
+    assert (await run_job())["scored"] == 0  # every trace is scored once
+    agent = (await client.get("/v1/agents/returns-assistant")).json()
+    assert agent["online"]["factuality.faithfulness"] == 1.0  # "30 days." is supported by the docs
+    assert agent["online"]["safety.canary_leak_rate"] == 0.0 and "quality.refusal_rate" in agent["online"]
+    metrics = (await client.get("/metrics")).text
+    assert 'pground_online_score{agent="returns-assistant",metric="factuality.faithfulness"} 1.0' in metrics
+
+
 async def test_unknown_target_is_rejected(client: httpx.AsyncClient) -> None:
     resp = await client.post("/v1/jobs", json={"kind": "run", "payload": {"target": "nope"}})
     assert resp.status_code == 422 and "unknown target" in resp.text

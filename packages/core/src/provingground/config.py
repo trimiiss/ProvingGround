@@ -192,6 +192,19 @@ class GatePolicy(BaseModel):
     rules: list[GateRule] = Field(default_factory=list)
 
 
+JobKind = Literal["run", "redteam", "gate", "online_eval"]
+
+
+class ScheduleConfig(BaseModel):
+    """A recurring platform job. ``target: "*"`` in the payload fans out to every fleet agent."""
+
+    model_config = ConfigDict(extra="forbid")
+    cron: str
+    job: JobKind
+    payload: dict[str, Any] = Field(default_factory=dict)
+    enabled: bool = True
+
+
 class ProjectConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     project: str = "default"
@@ -203,6 +216,7 @@ class ProjectConfig(BaseModel):
     target_sources: list[TargetSource] = Field(default_factory=list)
     suites: dict[str, SuiteConfig] = Field(default_factory=dict)
     gates: dict[str, GatePolicy] = Field(default_factory=dict)
+    schedules: dict[str, ScheduleConfig] = Field(default_factory=dict)
     _root: Path = PrivateAttr(default_factory=Path.cwd)
 
     @field_validator("suites")

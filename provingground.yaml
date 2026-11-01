@@ -161,3 +161,18 @@ gates:
       - {metric: cost.per_1k_requests_usd, max_increase: 25%, severity: warn}
       - {metric: reliability.error_rate, max: 0.02}
       - {critical_cases: must_pass}
+
+# Recurring jobs run by the platform worker (created on first sync; pause or edit them in the API).
+schedules:
+  nightly-fleet:
+    cron: "0 2 * * *"           # every agent's full suites, to catch silent model drift
+    job: run
+    payload: {target: "*", use_cache: false}
+  weekly-redteam:
+    cron: "30 4 * * 1"
+    job: redteam
+    payload: {target: "*", use_cache: false}
+  online-eval:
+    cron: "*/5 * * * *"         # score a 20% sample of the last hour's live traffic
+    job: online_eval
+    payload: {rate: 0.2, hours: 1}

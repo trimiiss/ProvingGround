@@ -334,6 +334,24 @@ async def sync_config(session: Session) -> dict[str, int]:
                 )
             )
             counts["policies"] += 1
+    # Schedules declared in the config are created once; after that the database owns them, so a
+    # schedule paused from the API or dashboard stays paused across syncs.
+    scheduled = {s.name for s in (await session.execute(select(db.Schedule))).scalars()}
+    counts["schedules"] = 0
+    for name, sched in cfg.schedules.items():
+        if name in scheduled:
+            continue
+        session.add(
+            db.Schedule(
+                name=name,
+                cron=sched.cron,
+                job_kind=sched.job,
+                payload=sched.payload,
+                enabled=sched.enabled,
+                next_run_at=croniter(sched.cron, datetime.now(UTC)).get_next(datetime),
+            )
+        )
+        counts["schedules"] += 1
     have = {d.name for d in (await session.execute(select(db.Dataset))).scalars()}
     for name, suite in cfg.suites.items():
         if name in have or not suite.dataset:

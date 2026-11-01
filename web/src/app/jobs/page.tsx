@@ -24,7 +24,16 @@ export default function JobsPage(props: PageProps<"/jobs">) {
 
 function target(j: JobOut): string {
   const p = j.payload as { target?: string };
-  return p.target ?? "—";
+  if (j.kind === "online_eval") return "live traffic";
+  return p.target === "*" ? "all agents" : (p.target ?? "—");
+}
+
+/** A one-line outcome for jobs that do not produce a run. */
+function summary(j: JobOut): string | null {
+  const r = (j.result ?? {}) as Record<string, number | undefined>;
+  if (r.enqueued !== undefined) return `${r.enqueued} jobs queued`;
+  if (j.kind === "online_eval" && r.scored !== undefined) return `${r.scored} requests scored`;
+  return null;
 }
 
 function link(j: JobOut) {
@@ -94,7 +103,7 @@ async function Jobs({ searchParams }: { searchParams: PageProps<"/jobs">["search
                             {l.label}
                           </Link>
                         ) : (
-                          "—"
+                          (summary(j) ?? "—")
                         )}
                       </TableCell>
                       <TableCell className="tabular text-right text-muted-foreground">{dur === null ? "—" : ms(dur)}</TableCell>
@@ -133,7 +142,7 @@ async function Jobs({ searchParams }: { searchParams: PageProps<"/jobs">["search
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell className="font-mono text-xs">{s.cron}</TableCell>
                     <TableCell>
-                      {s.job_kind} <span className="text-muted-foreground">{(s.payload as { target?: string })?.target ?? "all agents"}</span>
+                      {s.job_kind} <span className="text-muted-foreground">{s.job_kind === "online_eval" ? "live traffic" : (s.payload as { target?: string })?.target === "*" ? "all agents" : (s.payload as { target?: string })?.target}</span>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{s.last_run_at ? dateTime(s.last_run_at) : "never"}</TableCell>
                     <TableCell className="text-muted-foreground">{s.next_run_at ? dateTime(s.next_run_at) : "—"}</TableCell>

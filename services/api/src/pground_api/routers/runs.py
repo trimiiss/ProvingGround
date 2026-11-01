@@ -235,7 +235,8 @@ def job_out(j: db.Job) -> JobOut:
 async def create_job(body: JobIn, session: Session) -> JobOut:
     cfg = project_config()
     target = body.payload.get("target")
-    if not target or target not in cfg.all_targets():
+    fleet_wide = body.kind == "online_eval" or (target == "*" and body.kind in ("run", "redteam"))
+    if not fleet_wide and (not target or target not in cfg.all_targets()):
         raise HTTPException(422, f"unknown target {target!r}; known: {sorted(cfg.all_targets())}")
     if body.kind == "gate" and body.payload.get("policy", "release") not in cfg.gates:
         raise HTTPException(422, f"unknown gate policy {body.payload.get('policy')!r}")
