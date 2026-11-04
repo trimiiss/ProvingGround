@@ -7,6 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import distinct_on
 
 from ..db import models as db
 from ..deps import Admin, Session
@@ -49,7 +50,7 @@ async def redteam_asr(session: Session) -> dict[str, float]:
     rows = (
         await session.execute(
             select(db.Run.agent, db.Run.metrics)
-            .distinct(db.Run.agent)
+            .ext(distinct_on(db.Run.agent))
             .where(db.Run.kind == "redteam")
             .order_by(db.Run.agent, db.Run.created_at.desc())
         )
@@ -167,7 +168,7 @@ async def overview(session: Session) -> Overview:
         for r in (
             await session.execute(
                 select(db.Run)
-                .distinct(db.Run.agent)
+                .ext(distinct_on(db.Run.agent))
                 .where(db.Run.kind == "eval", MONITORED)
                 .order_by(db.Run.agent, db.Run.created_at.desc())
             )
@@ -178,7 +179,7 @@ async def overview(session: Session) -> Overview:
         for g in (
             await session.execute(
                 select(db.GateEvaluation)
-                .distinct(db.GateEvaluation.agent)
+                .ext(distinct_on(db.GateEvaluation.agent))
                 .order_by(db.GateEvaluation.agent, db.GateEvaluation.created_at.desc())
             )
         ).scalars()

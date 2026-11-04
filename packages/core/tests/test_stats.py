@@ -52,3 +52,17 @@ def test_percentile_stat_and_mde() -> None:
     mde = minimum_detectable_effect([0.1, -0.1, 0.0, 0.2, -0.2])
     assert mde is not None and mde > 0
     assert minimum_detectable_effect([0.1]) is None
+
+
+def test_pass_fail_metrics_get_an_honest_ci_on_small_samples() -> None:
+    from provingground.metrics import mean_ci
+
+    # 6/6 correct must not read "95% CI 100%-100%"; Wilson keeps the small-sample uncertainty
+    lo, hi = mean_ci(np.ones(6), n_boot=1000, seed=0)
+    assert hi is not None and abs(hi - 1.0) < 1e-9 and lo is not None and 0.55 < lo < 0.65
+    lo, hi = mean_ci(np.zeros(6), n_boot=1000, seed=0)
+    assert lo == 0.0 and hi is not None and 0.35 < hi < 0.45
+    # continuous scores still use the bootstrap
+    assert mean_ci(np.array([0.2, 0.5, 0.9]), n_boot=1000, seed=0) == bootstrap_ci(
+        [0.2, 0.5, 0.9], n_boot=1000, seed=0
+    )

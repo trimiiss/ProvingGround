@@ -20,7 +20,7 @@ from typing import Literal
 import numpy as np
 
 from .models import SCORABLE_STATUSES, CaseResult, CaseStatus, MetricStat, RunSummary
-from .stats import bootstrap_ci, percentile_stat
+from .stats import bootstrap_ci, percentile_stat, wilson_interval
 
 Direction = Literal["higher", "lower"]
 
@@ -83,12 +83,21 @@ def case_metric_values(results: Iterable[CaseResult]) -> dict[str, list[tuple[fl
     return out
 
 
+def mean_ci(vals: np.ndarray, *, n_boot: int, seed: int) -> tuple[float | None, float | None]:
+    """CI of a mean. Pass/fail data (only 0s and 1s) gets a Wilson interval: the bootstrap collapses
+    to a zero-width interval when every case agrees (6/6 correct reads "95% CI 100%-100%"), while
+    Wilson stays honest about small samples (6/6 is 61%-100%)."""
+    if vals.size and np.isin(vals, (0.0, 1.0)).all():
+        return wilson_interval(int(vals.sum()), int(vals.size))
+    return bootstrap_ci(vals, n_boot=n_boot, seed=seed)
+
+
 def _metric_stats(results: list[CaseResult], *, n_boot: int, seed: int) -> dict[str, MetricStat]:
     stats: dict[str, MetricStat] = {}
     for metric, pairs in sorted(case_metric_values(results).items()):
         vals = np.array([v for v, _ in pairs], dtype=float)
         verdicts = [p for _, p in pairs if p is not None]
-        lo, hi = bootstrap_ci(vals, n_boot=n_boot, seed=seed)
+        lo, hi = mean_ci(vals, n_boot=n_boot, seed=seed)
         stats[metric] = MetricStat(
             metric=metric,
             n=len(vals),
@@ -117,7 +126,7 @@ def _metric_stats(results: list[CaseResult], *, n_boot: int, seed: int) -> dict[
             )  # fmt: skip
     for metric, series in run_vals.items():
         arr = np.array(series, dtype=float)
-        lo, hi = bootstrap_ci(arr, n_boot=n_boot, seed=seed)
+        lo, hi = mean_ci(arr, n_boot=n_boot, seed=seed)
         stats[metric] = MetricStat(
             metric=metric, n=arr.size, mean=float(arr.mean()), ci_low=lo, ci_high=hi,
             direction="lower", kind="run",

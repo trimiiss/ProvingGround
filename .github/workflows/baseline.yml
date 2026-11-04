@@ -19,13 +19,13 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - run: uv sync --frozen
 
       - name: Restore response cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .provingground/cache
           key: pground-cache-${{ github.sha }}
@@ -49,7 +49,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload run results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: baseline-runs-${{ github.sha }}
           path: .provingground/runs/

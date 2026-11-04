@@ -43,7 +43,7 @@ runs:
   using: composite
   steps:
     - name: Set up uv
-      uses: astral-sh/setup-uv@v6
+      uses: astral-sh/setup-uv@v7
       with:
         enable-cache: true
 
@@ -52,7 +52,7 @@ runs:
       run: ${{ inputs.install-command }}
 
     - name: Restore response cache
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: .provingground/cache
         key: pground-cache-${{ github.sha }}
@@ -84,7 +84,7 @@ runs:
 
     - name: Upload gate report
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: provingground-gate-report
         path: gate-out/
@@ -95,7 +95,7 @@ runs:
       if: >-
         always() && inputs.comment == 'true' && github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.repository
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         github-token: ${{ inputs.github-token }}
         script: |
