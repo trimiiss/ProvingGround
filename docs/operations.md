@@ -59,6 +59,12 @@ model references in config: a target's `model:` (`anthropic/claude-opus-5-5`, `o
 judge's. Then run `pground doctor` and a small `--sample 50` comparison before a full run: judge
 calls dominate cost.
 
+The `pground` CLI loads the nearest `.env` (the current directory or a parent); a variable already
+set in the shell wins. The compose stack passes the provider keys into the API, worker and demo
+agents, so after editing `.env` run `docker compose up -d` to recreate them. A `bot.py` in an
+uploaded folder runs in the worker and can read those keys, one more reason to keep
+`PGROUND_ALLOW_CODE_UPLOADS` off on a shared server.
+
 ## Running the database on Supabase
 
 Supabase is managed PostgreSQL, so the API, worker, migrations and the job queue

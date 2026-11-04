@@ -222,3 +222,18 @@ async def test_openai_refusal_and_errors() -> None:
         with pytest.raises(ProviderError) as exc:
             await bad.chat(ChatRequest(model="m", messages=[Message(role="user", content="q")]))
         assert exc.value.transient is transient
+
+
+def test_cli_loads_provider_keys_from_dotenv(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    from provingground.cli import load_dotenv_file
+
+    (tmp_path / ".env").write_text("ANTHROPIC_API_KEY=sk-from-dotenv\nOPENAI_API_KEY=sk-dotenv-openai\n")
+    sub = tmp_path / "examples" / "bot"
+    sub.mkdir(parents=True)
+    monkeypatch.chdir(sub)  # found from a subdirectory too, like running inside examples/my-first-bot
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")  # records the original state, so teardown undoes the load
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-from-shell")
+    assert load_dotenv_file() == tmp_path / ".env"
+    assert ProviderRegistry().get("anthropic").client.api_key == "sk-from-dotenv"  # type: ignore[attr-defined]
+    assert ProviderRegistry().get("openai").client.api_key == "sk-from-shell"  # type: ignore[attr-defined]

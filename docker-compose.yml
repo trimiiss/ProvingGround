@@ -21,6 +21,12 @@ x-python: &python
     PGROUND_PACKS_DIR: /data/packs
     # a bot.py in an uploaded folder runs in the worker: fine on your own machine, never on a shared one
     PGROUND_ALLOW_CODE_UPLOADS: ${PGROUND_ALLOW_CODE_UPLOADS:-true}
+    # Real LLM providers, from .env or the shell; empty means "not configured" (sim models need none)
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    GROQ_API_KEY: ${GROQ_API_KEY:-}
+    GEMINI_API_KEY: ${GEMINI_API_KEY:-}
   volumes:
     - packs:/data/packs
 

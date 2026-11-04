@@ -659,7 +659,20 @@ def gate_changed(
     raise typer.Exit(code)
 
 
+def load_dotenv_file() -> Path | None:
+    """Load the nearest ``.env`` (this directory or a parent) into the environment, so provider keys
+    such as ANTHROPIC_API_KEY work as the docs describe. Variables already set in the shell win."""
+    from dotenv import find_dotenv, load_dotenv
+
+    found = find_dotenv(usecwd=True)
+    if not found:
+        return None
+    load_dotenv(found, override=False)
+    return Path(found)
+
+
 def main() -> None:
+    load_dotenv_file()
     app()
 
 
