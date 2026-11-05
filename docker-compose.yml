@@ -89,6 +89,8 @@ services:
       # server side only: the admin key never reaches the browser
       PGROUND_API_URL: http://api:8000
       PGROUND_API_KEY: ${PGROUND_API_KEY:-dev-admin-key}
+      # who can sign in to the dashboard: "name:password,name:password"
+      PGROUND_WEB_USERS: ${PGROUND_WEB_USERS:-admin:provingground}
     ports:
       - "3000:3000"
     depends_on:

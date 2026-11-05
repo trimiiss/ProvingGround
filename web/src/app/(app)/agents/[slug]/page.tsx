@@ -103,7 +103,7 @@ async function AgentDetail({ params }: { params: PageProps<"/agents/[slug]">["pa
           <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
             {HEADLINE.filter((m) => metrics[m] !== undefined).map((m) => {
               const info = metricInfo(m);
-              return <MetricTile key={m} label={info.label} value={info.format(metrics[m])} tone={toneFor(m, metrics[m])} />;
+              return <MetricTile key={m} label={info.label} help={info.hint} value={info.format(metrics[m])} tone={toneFor(m, metrics[m])} />;
             })}
           </div>
         </Section>
@@ -129,7 +129,7 @@ async function AgentDetail({ params }: { params: PageProps<"/agents/[slug]">["pa
           <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
             {ONLINE_METRICS.filter((m) => a.online?.[m] !== undefined).map((m) => {
               const info = metricInfo(m);
-              return <MetricTile key={m} label={info.label} value={info.format(a.online![m])} tone={toneFor(m, a.online![m])} />;
+              return <MetricTile key={m} label={info.label} help={info.hint} value={info.format(a.online![m])} tone={toneFor(m, a.online![m])} />;
             })}
           </div>
         </Section>

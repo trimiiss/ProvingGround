@@ -23,6 +23,11 @@ async function shot(page: Page, name: string, fullPage = false) {
   if (capture) await page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage });
 }
 
+test.beforeEach(async ({ page }) => {
+  const res = await page.request.post("/api/auth/login", { data: { username: "admin", password: "provingground" } });
+  expect(res.ok()).toBe(true);
+});
+
 test("every page renders the seeded data", async ({ page }) => {
   const pages: [string, string][] = [
     ["/", "Fleet"],
@@ -120,7 +125,25 @@ test("capture the README screenshots", async ({ page }) => {
   await shot(page, "fleet-dark");
 });
 
-test("drop a test folder and see each bot judged", async ({ page, request }) => {
+test("add a bot with the form, with no files", async ({ page }) => {
+  await page.goto("/upload");
+  await page.getByLabel("Bot name").fill("E2E Form Bot");
+  await page.getByLabel("Bot URL").fill("http://demo-agents:8100/agents/support-bot/chat");
+  await page.getByLabel("Message field").fill("input");
+  await page.getByLabel("Reply field").fill("output");
+  await page.getByLabel("Secret code").fill("PG-CANARY-SUP-7F3A, STAFF-ONLY-4471");
+  await page.getByLabel("Public contact details (optional)").fill("1-800-555-0199, support@acme-outfitters.example");
+  await page.getByLabel("Questions and right answers").fill("How long do refunds take? | Refunds take 5 business days.");
+  await page.getByRole("button", { name: "Test this bot" }).click();
+  const results = page.getByRole("region", { name: "Test results" });
+  await expect(results.getByRole("heading", { name: /^Results/ })).toBeVisible({ timeout: 150_000 });
+  await expect(results.getByText(/of checks passed/)).toBeVisible();
+  await results.getByRole("link", { name: /Answers and grades/ }).click();
+  await expect(page.getByText(/of 42 attacks worked/)).toBeVisible();
+  expect((await page.request.delete("/api/pg/v1/packs/e2e-form-bot")).status()).toBe(204);
+});
+
+test("drop a test folder and see each bot judged", async ({ page }) => {
   await page.goto("/upload");
   await expect(page.getByRole("heading", { level: 1, name: "Upload agent", exact: true })).toBeVisible();
   // the same folder a newcomer drags in: a buggy bot.py bot plus two demo bots over HTTP
@@ -135,5 +158,5 @@ test("drop a test folder and see each bot judged", async ({ page, request }) => 
   await results.getByRole("link", { name: /Why it was blocked/ }).first().click();
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await settle(page);
-  expect((await request.delete("/api/pg/v1/packs/upload-me")).status()).toBe(204); // leave the demo fleet as it was
+  expect((await page.request.delete("/api/pg/v1/packs/upload-me")).status()).toBe(204); // leave the demo fleet as it was
 });

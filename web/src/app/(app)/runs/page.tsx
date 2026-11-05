@@ -5,7 +5,7 @@ import { Page, PageHeader, PageSkeleton } from "@/components/page";
 import { RunsTable } from "@/components/runs-table";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getOverview, getRuns } from "@/lib/api";
+import { getGateEvaluations, getOverview, getRuns } from "@/lib/api";
 
 export const metadata = { title: "Runs" };
 
@@ -24,10 +24,13 @@ async function Runs({ searchParams }: { searchParams: PageProps<"/runs">["search
   const agent = first(sp.agent) ?? "all";
   const kind = first(sp.kind) ?? "all";
   const offset = Number(first(sp.offset) ?? 0) || 0;
-  const [runs, overview] = await Promise.all([
+  const [runs, overview, evaluations] = await Promise.all([
     getRuns({ agent: agent === "all" ? undefined : agent, kind: kind === "all" ? undefined : kind, limit: LIMIT, offset }),
     getOverview(),
+    getGateEvaluations({ agent: agent === "all" ? undefined : agent, limit: 200 }),
   ]);
+  // Newest first, so reversing lets the latest decision on a run win.
+  const verdicts = Object.fromEntries([...evaluations].reverse().map((e) => [e.candidate_run_id, e.verdict]));
   const cur = { agent, kind };
   const slugs = overview.agents.map((a) => a.agent.slug).sort();
 
@@ -53,12 +56,12 @@ async function Runs({ searchParams }: { searchParams: PageProps<"/runs">["search
         </form>
         <FilterChips
           current={kind}
-          options={[{ value: "all" }, { value: "eval" }, { value: "redteam", label: "red team" }, { value: "inspect" }]}
+          options={[{ value: "all" }, { value: "eval", label: "tests" }, { value: "redteam", label: "red team" }]}
           href={(v) => withParams("/runs", cur, { kind: v })}
         />
       </div>
       <Card className="p-0">
-        <RunsTable runs={runs.items} />
+        <RunsTable runs={runs.items} verdicts={verdicts} />
       </Card>
       <Pager total={runs.total} limit={LIMIT} offset={offset} href={(o) => withParams("/runs", cur, { offset: o })} />
     </Page>

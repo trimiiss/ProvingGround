@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.dialects.postgresql import distinct_on
 
 from ..db import models as db
@@ -46,12 +46,12 @@ def primary_quality(metrics: dict[str, object] | None) -> tuple[str | None, floa
 
 
 async def redteam_asr(session: Session) -> dict[str, float]:
-    """Attack success rate per agent from its most recent red-team campaign (full security suites)."""
+    """Attack success rate per agent from its most recent campaign, or upload run with built-in attacks."""
     rows = (
         await session.execute(
             select(db.Run.agent, db.Run.metrics)
             .ext(distinct_on(db.Run.agent))
-            .where(db.Run.kind == "redteam")
+            .where(or_(db.Run.kind == "redteam", db.Run.labels["attacks"].astext == "builtin"))
             .order_by(db.Run.agent, db.Run.created_at.desc())
         )
     ).all()

@@ -21,5 +21,11 @@ export default defineConfig({
   },
   webServer: process.env.PG_WEB_URL
     ? undefined
-    : { command: "npm run start", url: baseURL, reuseExistingServer: true, timeout: 120_000 },
+    : {
+        command: "npm run start",
+        url: `${baseURL}/login`,
+        reuseExistingServer: true,
+        timeout: 120_000,
+        env: { PGROUND_WEB_USERS: process.env.PGROUND_WEB_USERS ?? "admin:provingground" },
+      },
 });

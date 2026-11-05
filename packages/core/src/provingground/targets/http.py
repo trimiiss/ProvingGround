@@ -82,7 +82,10 @@ class HttpTarget(Target):
             canaries=self.config.canaries,
             forbidden_terms=self.config.forbidden_terms,
             tool_policies=self.config.tool_policies,
-            config={"url": self.config.url, "public_info": self.config.args.get("public_info", [])},
+            config={
+                "url": self.config.url,
+                "public_info": [*self.config.public_info, *self.config.args.get("public_info", [])],
+            },
             cacheable=True,
         )
 

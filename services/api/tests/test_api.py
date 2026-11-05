@@ -573,6 +573,55 @@ async def test_an_uploaded_folder_joins_the_fleet_and_is_judged(client: httpx.As
     assert not (uploads / "my-first-bot").exists()
 
 
+async def test_a_folder_with_no_attack_file_still_faces_the_builtin_attacks(
+    client: httpx.AsyncClient, uploads
+) -> None:
+    from pground_api import queue, worker
+
+    files = folder("my-first-bot")
+    yaml_key = "my-first-bot/provingground.yaml"
+    del files["my-first-bot/attacks.jsonl"]
+    config = files[yaml_key].replace("suites: [questions, attacks]", "suites: [questions]")
+    config = config.replace("  attacks:                          # the hacking exam\n", "")
+    config = config.replace("    dataset: attacks.jsonl\n", "")
+    config = config.replace("    scorers: [attack_success]       # did the secret leak?\n", "")
+    resp = await client.post("/v1/packs", json={"files": {**files, yaml_key: config}})
+    assert resp.status_code == 201, resp.text
+    agent = (await client.get("/v1/agents/shop-bot")).json()["agent"]
+    assert agent["suites"] == ["questions", "security-builtin-data", "security-builtin-secrets"]
+
+    claimed = await queue.claim("w")
+    assert claimed is not None
+    await worker.execute(claimed, "w")
+    job = (await client.get(f"/v1/jobs/{resp.json()['jobs'][0]['id']}")).json()
+    assert job["status"] == "succeeded", job["error"]
+    assert job["result"]["n_results"] == 3 + 42  # its questions, plus 14 data and 28 secret attacks
+
+    # the fake-admin trick is among them, and the Red team page can find the run
+    runs = (await client.get("/v1/runs", params={"label": "attacks=builtin"})).json()["items"]
+    assert [r["id"] for r in runs] == [job["result"]["run_id"]]
+    summary = (await client.get(f"/v1/runs/{runs[0]['id']}/redteam")).json()
+    assert summary["attempts"] == 42 and summary["successes"] > 0
+    assert (await client.get("/v1/agents/shop-bot")).json()["asr"] == pytest.approx(summary["asr"])
+
+
+async def test_builtin_attacks_only_run_where_a_win_could_be_detected(client: httpx.AsyncClient, uploads) -> None:
+    good = folder("my-first-bot")
+    yaml_key = "my-first-bot/provingground.yaml"
+    plain = good[yaml_key].replace("    canaries: [ACME-SECRET-42]", "    public_info: [help@shop.example]")
+    plain = plain.replace("    kind: python\n", "    kind: model\n    model: sim/model-a\n")
+    plain = plain.replace("    entrypoint: bot:make_bot        # bot.py in this folder, function make_bot\n", "")
+    resp = await client.post("/v1/packs", json={"files": {**good, yaml_key: plain}})
+    assert resp.status_code == 201, resp.text
+    suites = (await client.get("/v1/agents/shop-bot")).json()["agent"]["suites"]
+    assert suites == ["questions", "attacks", "security-builtin-data"]
+
+    banned = plain.replace("    public_info:", "    forbidden_terms: [RivalCo]\n    public_info:")
+    assert (await client.post("/v1/packs", json={"files": {**good, yaml_key: banned}})).status_code == 201
+    suites = (await client.get("/v1/agents/shop-bot")).json()["agent"]["suites"]
+    assert suites == ["questions", "attacks", "security-builtin-data", "security-builtin-topics"]
+
+
 async def test_uploads_that_cannot_be_trusted_or_run_are_refused(
     client: httpx.AsyncClient, uploads, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -595,6 +644,10 @@ async def test_uploads_that_cannot_be_trusted_or_run_are_refused(
     )
     outside = good[yaml_key].replace("dataset: questions.jsonl", "dataset: ../../provingground.yaml")
     assert "inside the folder" in await refused({**good, yaml_key: outside})
+    reserved = good[yaml_key].replace("  questions:  ", "  security-builtin-data:  ").replace(
+        "suites: [questions, attacks]", "suites: [security-builtin-data, attacks]"
+    )
+    assert "reserved" in await refused({**good, yaml_key: reserved})
     await client.post("/v1/admin/sync")  # the demo fleet owns support-bot
     taken = good[yaml_key].replace("shop-bot:", "support-bot:")
     assert "already exists" in await refused({**good, yaml_key: taken}, 409)

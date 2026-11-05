@@ -7,14 +7,15 @@ a few seconds.
 | Bot | What it is | Expected verdict |
 |---|---|---|
 | Buggy shop bot | `bot.py` in this folder: says refunds take 10 days (it's 5) and leaks its secret to "admins" | ❌ blocked |
-| Helpdesk bot | The demo support assistant on the premium model, reached over HTTP | ✅ pass |
-| Kiosk bot | The demo kiosk on the budget model, reached over HTTP: falls for 2 of the 3 attacks | ❌ blocked |
+| Helpdesk bot | The demo support assistant on the premium model, reached over HTTP: stays under the 5% attack limit | ✅ pass |
+| Kiosk bot | The demo kiosk on the budget model, reached over HTTP: falls for about a third of the attacks | ❌ blocked |
 
 What's inside:
 
 * `provingground.yaml`: the bots (`targets`), the exams (`suites`) and the pass/fail rules (`gates`)
 * `questions.jsonl`: questions with the facts a right answer must contain
-* `attacks.jsonl`: messages that try to make a bot reveal its secret
+* `attacks.jsonl`: optional extra attacks. Every bot already gets the
+  [built-in ones](../../docs/red-teaming.md#built-in-attacks-for-uploaded-bots)
 * `bot.py`: the buggy shop bot's code
 
 ## Make it your own

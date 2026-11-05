@@ -74,8 +74,8 @@ export function CaseTable({ items }: { items: Brief[] }) {
                 </p>
                 <p className="truncate text-xs text-muted-foreground">{r.suite}</p>
               </TableCell>
-              <TableCell className="max-w-72 text-muted-foreground">{clip(r.input_preview, 110)}</TableCell>
-              <TableCell className="max-w-72">{clip(r.output_text, 110)}</TableCell>
+              <TableCell className="max-w-72 truncate text-muted-foreground">{clip(r.input_preview, 110)}</TableCell>
+              <TableCell className="max-w-72 truncate">{clip(r.output_text, 110)}</TableCell>
               <TableCell className="tabular text-right">{ms(r.latency_ms)}</TableCell>
               <TableCell className="tabular text-right">{usd(r.cost_usd)}</TableCell>
             </TableRow>

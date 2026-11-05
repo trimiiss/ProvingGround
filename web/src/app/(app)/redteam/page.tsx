@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { type AttackCell, getOverview, getRedteam, getRun, getRuns, orNull, type RedteamSummary } from "@/lib/api";
 import { dateTime, modelName, num, pct } from "@/lib/format";
-import { toneClass, toneFor } from "@/lib/metrics";
+import { metricInfo, toneClass, toneFor } from "@/lib/metrics";
 
 export const metadata = { title: "Red team" };
 
@@ -34,7 +34,11 @@ async function RedTeam({ searchParams }: { searchParams: PageProps<"/redteam">["
   const runParam = first(sp.run);
   const runForParam = runParam ? await orNull(getRun(runParam)) : null;
   const agent = first(sp.agent) ?? runForParam?.agent ?? worst?.agent.slug;
-  const campaigns = agent ? (await getRuns({ agent, kind: "redteam", limit: 30 })).items : [];
+  // An uploaded bot's normal run carries the built-in attacks, so it counts as a campaign too.
+  const [dedicated, uploaded] = agent
+    ? await Promise.all([getRuns({ agent, kind: "redteam", limit: 30 }), getRuns({ agent, label: "attacks=builtin", limit: 30 })])
+    : [null, null];
+  const campaigns = [...(dedicated?.items ?? []), ...(uploaded?.items ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 30);
   const selected = runParam && campaigns.some((c) => c.id === runParam) ? runParam : campaigns[0]?.id;
   const [summary, run] = selected ? await Promise.all([orNull(getRedteam(selected)), getRun(selected)]) : [null, null];
   const canaries = ((run?.target ?? {}) as { canaries?: string[] }).canaries ?? [];
@@ -60,7 +64,7 @@ async function RedTeam({ searchParams }: { searchParams: PageProps<"/redteam">["
               <NativeSelect name="run" defaultValue={selected}>
                 {campaigns.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {dateTime(c.created_at)} · {modelName(c.model)} · {pct(c.metrics?.["safety.attack_success_rate"], 1)} won · {c.n_results} attacks
+                    {dateTime(c.created_at)} · {modelName(c.model)} · {pct(c.metrics?.["safety.attack_success_rate"], 1)} won · {c.n_results} {c.kind === "redteam" ? "attacks" : "cases"}
                   </option>
                 ))}
               </NativeSelect>
@@ -89,7 +93,7 @@ function Report({ s, canaries }: { s: RedteamSummary; canaries: string[] }) {
   return (
     <>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <MetricTile label="Attack success rate" value={pct(s.asr, 1)} tone={tone} sub={s.asr_ci?.[0] != null && s.asr_ci?.[1] != null ? `95% CI ${pct(s.asr_ci[0], 1)} – ${pct(s.asr_ci[1], 1)}` : undefined} />
+        <MetricTile label="Attack success rate" help={metricInfo("safety.attack_success_rate").hint} value={pct(s.asr, 1)} tone={tone} sub={s.asr_ci?.[0] != null && s.asr_ci?.[1] != null ? `95% CI ${pct(s.asr_ci[0], 1)} – ${pct(s.asr_ci[1], 1)}` : undefined} />
         <MetricTile label="Attacks that succeeded" value={`${num(s.successes)} / ${num(s.attempts)}`} sub={s.not_scored ? `${s.not_scored} not scored (errors)` : undefined} />
         <MetricTile label="Model" value={modelName(s.model)} sub={s.target} />
         <MetricTile label="False refusals" value={s.false_refusal_rate === null ? "—" : pct(s.false_refusal_rate, 1)} sub="benign requests wrongly refused" tone={s.false_refusal_rate !== null && s.false_refusal_rate > 0.1 ? "warn" : "neutral"} />

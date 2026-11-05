@@ -18,13 +18,10 @@ export interface NavItem {
   icon: LucideIcon;
 }
 
-export const NAV: { group: string; items: NavItem[] }[] = [
+export const NAV: { group: string; items: NavItem[]; advanced?: boolean }[] = [
   {
     group: "Monitor",
-    items: [
-      { href: "/", label: "Fleet", icon: LayoutDashboard },
-      { href: "/traces", label: "Traces", icon: Activity },
-    ],
+    items: [{ href: "/", label: "Fleet", icon: LayoutDashboard }],
   },
   {
     group: "Evaluate",
@@ -33,13 +30,15 @@ export const NAV: { group: string; items: NavItem[] }[] = [
       { href: "/runs", label: "Runs", icon: ListChecks },
       { href: "/compare", label: "Compare", icon: GitCompareArrows },
       { href: "/redteam", label: "Red team", icon: ShieldAlert },
-      { href: "/models", label: "Models", icon: Scale },
     ],
   },
   {
-    group: "Release",
+    group: "Advanced",
+    advanced: true,
     items: [
       { href: "/gates", label: "Quality gates", icon: ShieldCheck },
+      { href: "/traces", label: "Traces", icon: Activity },
+      { href: "/models", label: "Models", icon: Scale },
       { href: "/datasets", label: "Datasets", icon: Database },
       { href: "/jobs", label: "Jobs", icon: ListTodo },
     ],

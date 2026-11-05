@@ -1,36 +1,58 @@
 import Link from "next/link";
-import { KindBadge } from "@/components/status";
+import { MetricHelp } from "@/components/metric-help";
+import { KindBadge, VerdictBadge } from "@/components/status";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { RunBrief } from "@/lib/api";
-import { modelName, ms, num, pct, relTime, shortId, usd } from "@/lib/format";
-import { primaryQuality, toneClass, toneFor } from "@/lib/metrics";
+import { modelName, ms, num, pct, relTime, usd } from "@/lib/format";
+import { metricInfo, primaryQuality, toneClass, toneFor } from "@/lib/metrics";
 
-export function RunsTable({ runs, showAgent = true }: { runs: RunBrief[]; showAgent?: boolean }) {
+const ATTACKS = "safety.attack_success_rate";
+const LATENCY = "perf.latency_p95_ms";
+
+export function RunsTable({
+  runs,
+  showAgent = true,
+  verdicts = {},
+}: {
+  runs: RunBrief[];
+  showAgent?: boolean;
+  /** run id -> gate verdict, for the runs that went through a gate */
+  verdicts?: Record<string, string>;
+}) {
+  // Speed and cost are made up on the simulated models, so they only earn a column with a real one.
+  const real = runs.some((r) => r.model && !r.model.startsWith("sim/"));
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Run</TableHead>
+          <TableHead>When</TableHead>
           {showAgent && <TableHead>Agent</TableHead>}
-          <TableHead>Kind</TableHead>
+          <TableHead>Result</TableHead>
           <TableHead>Model</TableHead>
           <TableHead className="text-right">Cases</TableHead>
-          <TableHead className="text-right">Quality</TableHead>
-          <TableHead className="text-right">Attacks won</TableHead>
-          <TableHead className="text-right">p95</TableHead>
-          <TableHead className="text-right">Cost</TableHead>
-          <TableHead className="text-right">When</TableHead>
+          <TableHead className="text-right">
+            <span className="inline-flex items-center gap-1">
+              Quality <MetricHelp text={metricInfo("quality.correctness").hint ?? ""} />
+            </span>
+          </TableHead>
+          <TableHead className="text-right">
+            <span className="inline-flex items-center gap-1">
+              Attacks won <MetricHelp text={metricInfo(ATTACKS).hint ?? ""} />
+            </span>
+          </TableHead>
+          {real && <TableHead className="text-right">p95</TableHead>}
+          {real && <TableHead className="text-right">Cost</TableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
         {runs.map((r) => {
           const q = primaryQuality(r.metrics);
-          const asr = r.metrics?.["safety.attack_success_rate"];
+          const asr = r.metrics?.[ATTACKS];
           return (
             <TableRow key={r.id}>
               <TableCell>
-                <Link href={`/runs/${r.id}`} className="font-mono text-xs text-primary hover:underline" title={r.id}>
-                  {shortId(r.id)}
+                <Link href={`/runs/${r.id}`} className="text-primary hover:underline" title={`${r.id} · ${r.created_at}`}>
+                  {relTime(r.created_at)}
                 </Link>
               </TableCell>
               {showAgent && (
@@ -41,17 +63,18 @@ export function RunsTable({ runs, showAgent = true }: { runs: RunBrief[]; showAg
                 </TableCell>
               )}
               <TableCell>
-                <KindBadge kind={r.kind} />
+                <span className="flex items-center gap-1.5">
+                  {verdicts[r.id] && <VerdictBadge verdict={verdicts[r.id]} />}
+                  {r.kind !== "eval" && <KindBadge kind={r.kind} />}
+                  {r.kind === "eval" && !verdicts[r.id] && <span className="text-muted-foreground">—</span>}
+                </span>
               </TableCell>
               <TableCell className="text-muted-foreground">{modelName(r.model)}</TableCell>
               <TableCell className="tabular text-right">{num(r.n_results)}</TableCell>
               <TableCell className={`tabular text-right ${q ? toneClass[toneFor(q.name, q.value)] : ""}`}>{q ? pct(q.value, 1) : "—"}</TableCell>
-              <TableCell className={`tabular text-right ${toneClass[toneFor("safety.attack_success_rate", asr)]}`}>{asr === undefined ? "—" : pct(asr, 1)}</TableCell>
-              <TableCell className="tabular text-right">{ms(r.metrics?.["perf.latency_p95_ms"])}</TableCell>
-              <TableCell className="tabular text-right">{usd(r.cost_usd)}</TableCell>
-              <TableCell className="text-right text-muted-foreground" title={r.created_at}>
-                {relTime(r.created_at)}
-              </TableCell>
+              <TableCell className={`tabular text-right ${toneClass[toneFor(ATTACKS, asr)]}`}>{asr === undefined ? "—" : pct(asr, 1)}</TableCell>
+              {real && <TableCell className="tabular text-right">{ms(r.metrics?.[LATENCY])}</TableCell>}
+              {real && <TableCell className="tabular text-right">{usd(r.cost_usd)}</TableCell>}
             </TableRow>
           );
         })}

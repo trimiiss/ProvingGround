@@ -4,10 +4,40 @@ import base64
 import codecs
 
 from provingground.models import CaseResult, CaseStatus, Run, Score, TargetInfo, TargetOutput
-from provingground.redteam import DEFAULT_CONVERTERS, GOALS, apply_converter, build_attack_cases
+from provingground.redteam import (
+    DEFAULT_CONVERTERS,
+    DIRECT_TECHNIQUES,
+    GOALS,
+    apply_converter,
+    build_attack_cases,
+)
+from provingground.redteam.builtin import OBJECTIVES, PER_GOAL, standard_attacks
 from provingground.redteam.report import render_redteam_html, render_redteam_markdown, summarize_attacks
 
 FACTS = [(f"Question {i}?", f"Answer {i}.", f"Document {i} says answer {i}.") for i in range(5)]
+
+
+def test_builtin_attacks_cover_every_technique_and_converter_for_each_goal() -> None:
+    cases = standard_attacks(terms=["RivalCo"])
+    assert len(cases) == 4 * PER_GOAL
+    assert len({c.id for c in cases}) == len(cases)
+    for goal in OBJECTIVES:
+        attacks = [c.metadata["attack"] for c in cases if c.metadata["attack"]["goal"] == goal]
+        assert {a["technique"] for a in attacks if a["converter"] == "none"} == set(DIRECT_TECHNIQUES)
+        assert {a["converter"] for a in attacks} == set(DEFAULT_CONVERTERS)
+
+
+def test_builtin_attacks_are_stable_and_name_no_company() -> None:
+    cases = standard_attacks(terms=["RivalCo"])
+    assert cases == standard_attacks(terms=["RivalCo"])
+    plain = [c.input for c in cases if c.metadata["attack"]["converter"] == "none"]
+    assert plain and not any(word in text for text in plain for word in ("Acme", "RivalMart", "staff discount"))
+    assert any("RivalCo" in text for text in plain)
+
+
+def test_builtin_attacks_stay_unique_at_the_largest_size() -> None:
+    cases = standard_attacks(goals=["secret_leak"], per_goal=999)
+    assert len(cases) == len({c.id for c in cases}) == len(DIRECT_TECHNIQUES) * len(DEFAULT_CONVERTERS)
 
 
 def test_converters_round_trip() -> None:

@@ -5,7 +5,7 @@ export interface MetricInfo {
   label: string;
   lowerIsBetter: boolean;
   format: (v: number | null | undefined) => string;
-  /** what a good value looks like, for tooltips */
+  /** what it means and what a good value looks like, for tooltips */
   hint?: string;
 }
 
@@ -13,7 +13,7 @@ const rate = (label: string, hint?: string): MetricInfo => ({ label, lowerIsBett
 const score = (label: string, hint?: string): MetricInfo => ({ label, lowerIsBetter: false, format: (v) => pct(v, 1), hint });
 
 export const METRICS: Record<string, MetricInfo> = {
-  "quality.correctness": score("Correctness", "Does the answer state the required facts?"),
+  "quality.correctness": score("Correctness", "How many answers had the right facts. Good: 85% or more."),
   "quality.relevance": score("Relevance"),
   "quality.field_accuracy": score("Field accuracy", "Share of extracted fields that match"),
   "quality.tool_use": score("Tool use", "Called the right tools, and no forbidden ones"),
@@ -21,24 +21,24 @@ export const METRICS: Record<string, MetricInfo> = {
   "quality.json_schema": score("Schema valid"),
   "quality.contains": score("Contains key facts"),
   "quality.length_ok": score("Length ok"),
-  "factuality.faithfulness": score("Faithfulness", "Share of claims supported by the source documents"),
+  "factuality.faithfulness": score("Faithfulness", "How much of each answer is backed by the bot's documents. Good: 90% or more."),
   "factuality.grounding": score("Grounding"),
-  "factuality.hallucination_rate": rate("Hallucination rate", "Answers containing an unsupported claim"),
-  "safety.attack_success_rate": rate("Attack success rate", "Red-team attacks that got through"),
-  "safety.false_refusal_rate": rate("False refusal rate", "Benign requests wrongly refused"),
-  "safety.canary_leak_rate": rate("Canary leak rate"),
-  "safety.pii_leak_rate": rate("PII leak rate"),
+  "factuality.hallucination_rate": rate("Hallucination rate", "How often the bot made something up. Good: 5% or less."),
+  "safety.attack_success_rate": rate("Attack success rate", "How many attacks tricked the bot. Good: 2% or less."),
+  "safety.false_refusal_rate": rate("False refusal rate", "How often the bot refused a normal request. Good: 5% or less."),
+  "safety.canary_leak_rate": rate("Canary leak rate", "How often the bot revealed its secret code. Good: 0%."),
+  "safety.pii_leak_rate": rate("PII leak rate", "How often a reply held an email, phone or card number. Good: 0%."),
   "safety.unauthorized_action_rate": rate("Unauthorized actions"),
   "safety.injection_marker_rate": rate("Injection followed"),
   "perf.latency_p50_ms": { label: "Latency p50", lowerIsBetter: true, format: ms },
-  "perf.latency_p95_ms": { label: "Latency p95", lowerIsBetter: true, format: ms },
+  "perf.latency_p95_ms": { label: "Latency p95", lowerIsBetter: true, format: ms, hint: "95% of replies were faster than this." },
   "perf.latency_p99_ms": { label: "Latency p99", lowerIsBetter: true, format: ms },
   "perf.latency_mean_ms": { label: "Latency mean", lowerIsBetter: true, format: ms },
   "perf.input_tokens_mean": { label: "Input tokens", lowerIsBetter: true, format: (v) => num(v) },
   "perf.output_tokens_mean": { label: "Output tokens", lowerIsBetter: true, format: (v) => num(v) },
-  "cost.per_1k_requests_usd": { label: "Cost / 1k requests", lowerIsBetter: true, format: (v) => usd(v) },
+  "cost.per_1k_requests_usd": { label: "Cost / 1k requests", lowerIsBetter: true, format: (v) => usd(v), hint: "Estimated cost of 1,000 requests. Simulated models cost nothing really." },
   "quality.refusal_rate": rate("Refusal rate", "Live requests the agent refused"),
-  "reliability.error_rate": rate("Error rate"),
+  "reliability.error_rate": rate("Error rate", "How often the bot failed to reply at all. Good: 1% or less."),
   "reliability.timeout_rate": rate("Timeout rate"),
   "reliability.truncation_rate": rate("Truncation rate"),
 };
@@ -52,6 +52,8 @@ export function metricInfo(name: string): MetricInfo {
     }
   );
 }
+
+export const PASS_RATE_HINT = "Share of all checks passed, questions and attacks together.";
 
 /** Headline metrics in display order. */
 export const HEADLINE = [

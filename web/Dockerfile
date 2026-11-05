@@ -27,5 +27,5 @@ COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 USER node
 EXPOSE 3000
-HEALTHCHECK --interval=15s --timeout=5s --retries=10 CMD ["node", "-e", "fetch('http://localhost:3000/api/pg/v1/config').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+HEALTHCHECK --interval=15s --timeout=5s --retries=10 CMD ["node", "-e", "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
 CMD ["node", "server.js"]

@@ -104,6 +104,7 @@ class TargetConfig(BaseModel):
     # safety metadata (python targets usually report their own)
     canaries: list[str] = Field(default_factory=list)
     forbidden_terms: list[str] = Field(default_factory=list)
+    public_info: list[str] = Field(default_factory=list)  # e.g. a support email: not a PII leak
     tool_policies: list[ToolPolicy] = Field(default_factory=list)
 
     @model_validator(mode="after")

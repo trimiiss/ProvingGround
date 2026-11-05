@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Menu } from "lucide-react";
+import { ChevronRight, ExternalLink, LogOut, Menu } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -57,28 +57,47 @@ function NavList({ pathname, onNavigate }: { pathname: string; onNavigate?: () =
     href === "/" ? pathname === "/" || pathname.startsWith("/agents") : pathname.startsWith(href);
   return (
     <nav className="flex flex-col gap-5" aria-label="Main">
-      {NAV.map((g) => (
-        <div key={g.group} className="flex flex-col gap-0.5">
-          <p className="px-2.5 pb-1 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">{g.group}</p>
-          {g.items.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              onClick={onNavigate}
-              aria-current={active(href) ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                active(href) && "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
-              )}
-            >
-              <Icon className="size-4 shrink-0" />
-              {label}
-            </Link>
-          ))}
-        </div>
-      ))}
+      {NAV.map((g) => {
+        const links = g.items.map(({ href, label, icon: Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            onClick={onNavigate}
+            aria-current={active(href) ? "page" : undefined}
+            className={cn(
+              "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              active(href) && "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
+            )}
+          >
+            <Icon className="size-4 shrink-0" />
+            {label}
+          </Link>
+        ));
+        const heading = "px-2.5 pb-1 text-[11px] font-medium tracking-wider text-muted-foreground uppercase";
+        return g.advanced ? (
+          <details key={g.group} open={g.items.some((i) => active(i.href))} className="group flex flex-col gap-0.5">
+            <summary className={cn(heading, "flex cursor-pointer list-none items-center justify-between [&::-webkit-details-marker]:hidden")}>
+              {g.group}
+              <ChevronRight className="size-3 transition-transform group-open:rotate-90" />
+            </summary>
+            {links}
+          </details>
+        ) : (
+          <div key={g.group} className="flex flex-col gap-0.5">
+            <p className={heading}>{g.group}</p>
+            {links}
+          </div>
+        );
+      })}
     </nav>
   );
+}
+
+async function signOut() {
+  await fetch("/api/auth/logout", { method: "POST" });
+  // A full load on purpose: it drops the pages the client router still holds for this user.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.assign("/login");
 }
 
 function Footer() {
@@ -96,6 +115,14 @@ function Footer() {
           <ExternalLink className="size-3" />
         </a>
       ))}
+      <button
+        type="button"
+        onClick={signOut}
+        className="flex items-center justify-between rounded-md px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+      >
+        Sign out
+        <LogOut className="size-3" />
+      </button>
     </div>
   );
 }

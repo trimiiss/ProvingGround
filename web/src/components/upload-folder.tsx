@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { AddBotForm } from "@/components/add-bot-form";
 import { JobBadge, VerdictBadge } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -100,6 +101,12 @@ export function UploadFolder({ packs }: { packs: Pack[] }) {
     }
   }
 
+  async function addBot(files: Record<string, string>) {
+    const pack = await send<components["schemas"]["PackUploaded"]>("/api/pg/v1/packs", { method: "POST", body: JSON.stringify({ files }) });
+    setTracking({ name: pack.name, jobs: pack.jobs });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragging(false);
@@ -130,6 +137,22 @@ export function UploadFolder({ packs }: { packs: Pack[] }) {
 
   return (
     <div className="grid gap-6">
+      {tracking && (
+        <section className="grid gap-3" aria-label="Test results">
+          <h2 className="text-sm font-semibold tracking-tight">
+            {allDone ? "Results" : "Testing"} · <span className="font-mono">{tracking.name}</span>
+          </h2>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {jobs.map((q, i) => (
+              <JobCard key={tracking.jobs[i].id} job={q.data ?? tracking.jobs[i]} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <AddBotForm onSubmit={addBot} />
+
+      <h2 className="text-sm font-semibold tracking-tight">Or drop a test folder</h2>
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -174,19 +197,6 @@ export function UploadFolder({ packs }: { packs: Pack[] }) {
         <p role="alert" className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm break-words text-danger">
           {error}
         </p>
-      )}
-
-      {tracking && (
-        <section className="grid gap-3" aria-label="Test results">
-          <h2 className="text-sm font-semibold tracking-tight">
-            {allDone ? "Results" : "Testing"} · <span className="font-mono">{tracking.name}</span>
-          </h2>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {jobs.map((q, i) => (
-              <JobCard key={tracking.jobs[i].id} job={q.data ?? tracking.jobs[i]} />
-            ))}
-          </div>
-        </section>
       )}
 
       <section className="grid gap-3">

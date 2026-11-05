@@ -51,6 +51,29 @@ drift: a provider updating a model behind the same name shows up as a step in th
 no model-change marker. Manage schedules with `GET /v1/schedules`, `PUT /v1/schedules/{name}`,
 `DELETE /v1/schedules/{name}`; all times are UTC.
 
+## Sharing the dashboard
+
+The dashboard asks for a username and password. Accounts live in one setting in `.env`, then run
+`docker compose up -d` to apply it:
+
+```bash
+PGROUND_WEB_USERS=me:a-long-password,sam:another-long-password
+```
+
+The compose stack defaults to `admin` / `provingground`. Outside compose there is no default, so
+nobody can sign in until this is set. Editing the setting signs everyone out. Passwords can't
+contain a comma. Every account has the same full access, and sessions last 7 days.
+
+The login covers the dashboard only. Before other people can reach the machine:
+
+* Change `PGROUND_WEB_USERS`, `PGROUND_API_KEY`, `PGROUND_INGEST_KEY` and `GRAFANA_PASSWORD`. The
+  API on port 8000 accepts the admin key directly, with no login.
+* Publish only the dashboard's port, and serve it over HTTPS. Compose also publishes Postgres
+  (5432, default password), Prometheus (9090, no auth), Grafana (3001, anonymous viewer) and the
+  demo agents (8100). The session cookie is marked `Secure` when the HTTPS proxy sends
+  `X-Forwarded-Proto: https`.
+* Set `PGROUND_ALLOW_CODE_UPLOADS=false`. Otherwise any account can run Python in the worker.
+
 ## Using real models
 
 Nothing requires a key. To use real models, add keys to `.env` (see `.env.example`) and change
@@ -84,11 +107,13 @@ PGROUND_DATABASE_URL=postgresql+asyncpg://postgres.<project-ref>:<password>@aws-
 
 ## Uploading agents from the dashboard
 
-The **Upload agent** page takes a test folder: a `provingground.yaml` with its datasets and, for a
-Python bot, its code. Each target in it joins the fleet as an agent (its team is the folder's
+The **Upload agent** page has a form for a bot behind a URL: it builds the test folder for you. It
+also takes a test folder directly: a `provingground.yaml` with its datasets and, for a Python bot,
+its code. Each target in it joins the fleet as an agent (its team is the folder's
 `project` name), is evaluated straight away, and gets a verdict from the folder's `release` gate.
 Dropping a folder with the same `project` again replaces it; that is how you re-test after a fix.
-`examples/upload-me` is a ready-made folder with three bots.
+`examples/upload-me` is a ready-made folder with three bots. Each bot also takes the
+[built-in attacks](red-teaming.md#built-in-attacks-for-uploaded-bots), so an attack file is optional.
 
 Folders are stored in `PGROUND_PACKS_DIR`, which the API and the worker must share (a volume in
 `docker-compose.yml`). An upload is untrusted input, so it may not define `providers` (they would

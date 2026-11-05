@@ -87,6 +87,10 @@ async def handle_run(job: db.Job, progress: Progress) -> dict[str, Any]:
         suites = [
             s for s in cfg.target(p["target"]).suites if s.startswith("security-") or s == "over-refusal"
         ]
+    labels = {**(p.get("labels") or {}), "kind": kind, "job": str(job.id)}
+    planned = resolve_suites(cfg, cfg.target(p["target"]), suites)
+    if kind == "eval" and any(s.startswith(packs.BUILTIN_PREFIX) for s in planned):
+        labels["attacks"] = "builtin"  # one run feeds the gate and the Red team page, so nothing runs twice
     with code_scope(p, cfg):
         run = await run_target(
             cfg,
@@ -94,7 +98,7 @@ async def handle_run(job: db.Job, progress: Progress) -> dict[str, Any]:
             suites=suites,
             settings=_settings(p),
             overrides=p.get("overrides") or {},
-            labels={**(p.get("labels") or {}), "kind": kind, "job": str(job.id)},
+            labels=labels,
             progress=progress,
         )
     out: dict[str, Any] = {

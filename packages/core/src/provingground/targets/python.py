@@ -71,7 +71,7 @@ class PythonTarget(Target):
             config={
                 "entrypoint": self.config.entrypoint,
                 "args": self.config.args,
-                "public_info": d.get("public_info", []),
+                "public_info": [*self.config.public_info, *d.get("public_info", [])],
             },
             cacheable=bool(d.get("cacheable", True)),
         )

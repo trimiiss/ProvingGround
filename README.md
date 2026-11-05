@@ -17,7 +17,7 @@ Everything runs offline. The demo company ("Acme Outfitters", 20 agents) runs on
 | **Regression testing and CI/CD gates** | Policy-as-code rules: absolute thresholds, non-inferiority margins, and critical cases that must pass. Exit code 1 blocks the merge and the deploy job never runs. Only the agents a PR changed are evaluated. |
 | **Tracing and monitoring** | OpenTelemetry GenAI spans over OTLP, a trace explorer with an "add to dataset" button, Prometheus metrics, alert rules and Grafana dashboards. |
 | **Online evaluation** | A sampled share of live traffic is scored without reference answers: faithfulness to the retrieved documents, secret and PII leaks, refusals. Drift alerts fire on the hourly means. |
-| **Upload your own agents** | Drop a test folder on the dashboard: its bots join the fleet and are evaluated and gated straight away. |
+| **Upload your own agents** | Drop a test folder on the dashboard: its bots join the fleet, face up to 56 built-in attacks, and are evaluated and gated straight away. |
 | **Reports** | Markdown, HTML and JSON for every run, comparison and gate decision, plus a sticky PR comment. |
 
 ## Model A → Model B on a pull request
@@ -57,7 +57,7 @@ docker compose --profile traffic up -d traffic        # optional: live demo traf
 
 | | |
 |---|---|
-| Dashboard | http://localhost:3000 |
+| Dashboard (sign in with `admin` / `provingground`) | http://localhost:3000 |
 | API and OpenAPI docs | http://localhost:8000/docs |
 | Grafana (anonymous viewer) | http://localhost:3001 |
 | Prometheus | http://localhost:9090 |
@@ -74,14 +74,15 @@ uv run pground doctor                                                 # are the 
 uv run python scripts/simulate_pr.py                                  # the PR flow, locally
 ```
 
-No `.env` is needed. `.env.example` lists the optional settings: real LLM keys, passwords, Langfuse.
+No `.env` is needed. `.env.example` lists the optional settings: dashboard logins, real LLM keys, passwords, Langfuse.
 
 **New here?** [`examples/my-first-bot`](examples/my-first-bot/README.md) tests a tiny chatbot with
 two planted bugs in a minute, then shows how to point the same files at your own bot.
 
 **Test your own bots from the dashboard.** Open **Upload agent** (http://localhost:3000/upload) and
-drop a test folder: its bots join the fleet, are evaluated straight away and get a verdict. Try it
-with [`examples/upload-me`](examples/upload-me/README.md). To start with an empty fleet instead of
+fill in the form (the bot's URL, a secret code and some questions), or drop a test folder. The bot
+joins the fleet, faces the built-in attacks, and gets a verdict straight away. Try a folder with
+[`examples/upload-me`](examples/upload-me/README.md). To start with an empty fleet instead of
 the demo company, put `PGROUND_DEMO=false` in `.env` (see
 [Operations](docs/operations.md#uploading-agents-from-the-dashboard)).
 
@@ -150,7 +151,7 @@ flowchart LR
 
 * The simulated models are test doubles. They make the platform's behaviour reproducible, but their failure modes are simpler than a real model's. Templated injections in particular are easier to detect than real ones.
 * The offline judge is a heuristic and labels itself `sim/judge` in every score. Use a real judge (for example `claude-opus-5-5`) for scoring quality that matters, and run `pground doctor` after switching.
-* It is single-tenant with API-key auth. Put the dashboard behind your own SSO before exposing it.
+* It is single-tenant. The dashboard has a login, but every account sees the same data and can do everything. See [Sharing the dashboard](docs/operations.md#sharing-the-dashboard) before exposing it.
 
 ## Development
 
@@ -159,5 +160,5 @@ uv sync --all-extras                 # add the ML judges and framework adapters
 uv run pytest                        # API tests use the compose Postgres: docker compose up -d postgres
 uv run ruff check . && uv run mypy packages/core/src services/api/src services/demo_agents/src
 cd web && npm ci && npm run lint && npm run build
-PG_WEB_URL=http://localhost:3000 npx playwright test       # needs the seeded stack
+PG_WEB_URL=http://localhost:3000 npx playwright test       # needs the seeded stack; signs in as admin
 ```

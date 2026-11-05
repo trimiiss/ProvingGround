@@ -25,7 +25,7 @@ from typing import Any
 
 import yaml
 
-from provingground.config import CONFIG_FILENAME, ConfigError, ProjectConfig, load_config
+from provingground.config import CONFIG_FILENAME, ConfigError, ProjectConfig, SuiteConfig, load_config
 from provingground.datasets import load_suite
 
 from .settings import get_settings
@@ -34,6 +34,8 @@ TEXT_SUFFIXES = frozenset({".yaml", ".yml", ".jsonl", ".json", ".py", ".md", ".t
 MAX_FILES = 200
 MAX_BYTES = 5_000_000
 PACK_ENV = ("DEMO_AGENTS_URL",)
+# Added to every upload. The "security-" start makes them part of a red-team campaign too.
+BUILTIN_PREFIX = "security-builtin-"
 CODE_OFF = (
     "{what} runs Python code, and running uploaded code is turned off on this server. Set "
     "PGROUND_ALLOW_CODE_UPLOADS=true on a machine you control, or test the bot over HTTP instead."
@@ -82,6 +84,41 @@ def normalize(files: dict[str, str]) -> dict[str, str]:
     return clean
 
 
+def builtin_suite(description: str, goals: list[str], terms: list[str] | None = None) -> SuiteConfig:
+    generator = {
+        "entrypoint": "provingground.redteam.builtin:standard_attacks",
+        "goals": goals,
+        "terms": terms or [],
+    }
+    return SuiteConfig.model_validate(
+        {"description": description, "generator": generator, "scorers": ["attack_success"]}
+    )
+
+
+def add_builtin_attacks(cfg: ProjectConfig) -> None:
+    """Give each bot the ready-made attacks its detectors can judge.
+
+    A bot with no declared secret or forbidden terms skips those attacks: nothing could detect a
+    win, so they would only count as attacks it resisted. A Python bot can report its secrets itself.
+    """
+    own_suites = list(cfg.suites)
+    data, secrets, topics = (f"{BUILTIN_PREFIX}{name}" for name in ("data", "secrets", "topics"))
+    terms = sorted({term for target in cfg.targets.values() for term in target.forbidden_terms})
+    cfg.suites[data] = builtin_suite("Tries to get other customers' personal data.", ["pii_exfil"])
+    cfg.suites[secrets] = builtin_suite(
+        "Tries to get the hidden instructions and the secret code.", ["system_prompt_leak", "secret_leak"]
+    )
+    if terms:
+        cfg.suites[topics] = builtin_suite("Tries to get the forbidden terms said.", ["forbidden_topic"], terms)
+    for target in cfg.targets.values():
+        attacks = [data]
+        if target.canaries or target.kind == "python":
+            attacks.append(secrets)
+        if target.forbidden_terms:
+            attacks.append(topics)
+        target.suites = [*(target.suites or own_suites), *attacks]
+
+
 def load(root: Path, *, allow_code: bool) -> ProjectConfig:
     """Load a pack's config and check that every suite loads, without running any of its code."""
     path = root / CONFIG_FILENAME
@@ -110,6 +147,8 @@ def load(root: Path, *, allow_code: bool) -> ProjectConfig:
         if not (target.suites or cfg.suites):
             raise PackError(f"target {name!r} has no suites to run")
     for name, suite in cfg.suites.items():
+        if name.startswith(BUILTIN_PREFIX):
+            raise PackError(f"suite {name!r}: names starting {BUILTIN_PREFIX!r} are reserved, rename it")
         if suite.generator and not allow_code:
             raise PackError(CODE_OFF.format(what=f"suite {name!r} (generator)"))
         if suite.dataset and not cfg.resolve_path(suite.dataset).resolve().is_relative_to(base):
@@ -120,6 +159,7 @@ def load(root: Path, *, allow_code: bool) -> ProjectConfig:
             load_suite(cfg, name)
         except Exception as exc:  # bad JSON lines, unknown scorers: the uploader can fix these
             raise PackError(f"suite {name!r}: {exc}") from exc
+    add_builtin_attacks(cfg)
     return cfg
 
 
